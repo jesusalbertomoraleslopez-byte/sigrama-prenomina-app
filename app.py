@@ -109,7 +109,7 @@ if not os.path.exists(ruta_carpeta):
 
 # --- CREDENCIALES OBLIGATORIAS DE GITHUB ---
 st.sidebar.subheader("🔑 Credenciales de GitHub")
-GITHUB_TOKEN = st.sidebar.text_input("Introduce tu Token de GitHub:", type="password", help="Pegar aquí el token ghp_...")
+GITHUB_TOKEN = st.sidebar.text_input("Introduce tu Token de GitHub:", type="password", help="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")
 REPO_NAME = "jesusalbertomoraleslopez-byte/sigrama-prenomina-app"
 
 # Cargador de archivos en espera
