@@ -266,16 +266,12 @@ with tab_reporte:
             df_raw['Dia_Num'] = pd.to_datetime(df_raw['Fecha_Clean']).dt.day
             df_raw['Fecha_date'] = pd.to_datetime(df_raw['Fecha_Clean'], errors='coerce').dt.date
             
+            # FILTRO CRÍTICO REAL: Mapeo directo contra tus fechas del panel izquierdo
             df_raw_filtrado = df_raw[(df_raw['Fecha_date'] >= fecha_inicio) & (df_raw['Fecha_date'] <= fecha_fin)]
-            if df_raw_filtrado.empty and fecha_inicio.year == 2026:
-                fecha_inicio_2024 = datetime.strptime("2024-05-16", "%Y-%m-%d").date()
-                fecha_fin_2024 = datetime.strptime("2024-05-31", "%Y-%m-%d").date()
-                lista_dias = [fecha_inicio_2024 + timedelta(days=x) for x in range((fecha_fin_2024-fecha_inicio_2024).days + 1)]
-                df_raw_filtrado = df_raw[(df_raw['Fecha_date'] >= fecha_inicio_2024) & (df_raw['Fecha_date'] <= fecha_fin_2024)]
-            
             columnas_dias_str = [str(d.day) for d in lista_dias]
+            
             if df_raw_filtrado.empty:
-                st.info("💡 **Aviso del Sistema:** No se encontraron asistencias en el rango. Ajusta las fechas.")
+                st.info("💡 **Aviso del Sistema:** No se encontraron asistencias en el rango de fechas seleccionado. Verifica el periodo en el panel izquierdo.")
             else:
                 matriz = df_raw_filtrado.pivot_table(index=['#Empleado', 'Nombre del Empleado'], columns='Dia_Num', values='Cod_Incidencia', aggfunc='first')
                 for col_dia in [d.day for d in lista_dias]:
