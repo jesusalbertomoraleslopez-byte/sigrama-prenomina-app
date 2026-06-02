@@ -35,34 +35,45 @@ conn = conectar_db()
 st.sidebar.header("⚙️ Configuración del Periodo")
 ruta_carpeta = "./asistencias"
 
-# Crear la carpeta de destino automáticamente si no existe en el sistema
+# Asegurar la existencia física de la carpeta contenedora en el servidor
 if not os.path.exists(ruta_carpeta):
     os.makedirs(ruta_carpeta)
 
-# --- CARGADOR DE ARCHIVOS EN ESPERA ---
-st.sidebar.subheader("📥 Cargar Asistencias del Correo")
+# --- CARGADOR DE NUEVOS ARCHIVOS DESDE CORREO ---
+st.sidebar.subheader("📥 Cargar Nuevos Archivos")
 archivos_correo = st.sidebar.file_uploader(
-    "Arrastra aquí tus archivos .xls descargados:", 
+    "Arrastra aquí tus nuevos archivos diarios (.xls):", 
     type=["xls"], 
     accept_multiple_files=True,
-    help="Selecciona todos los archivos diarios de la quincena."
+    help="Descarga los archivos de tu correo y colócalos aquí."
 )
 
-# Botón de impulso para procesar los documentos cargados
 if archivos_correo:
-    st.sidebar.info(f"📋 {len(archivos_correo)} archivo(s) en espera.")
-    if st.sidebar.button("💾 Procesar y Guardar Asistencias", use_container_width=True):
+    st.sidebar.info(f"📋 {len(archivos_correo)} archivo(s) listos para guardarse.")
+    if st.sidebar.button("💾 Cargar Archivos a Carpeta de Asistencias", use_container_width=True):
         for archivo in archivos_correo:
-            ruta_destino = os.path.join(ruta_carpeta, archivo.name)
-            ruta_destino = ruta_destino.replace("\\", "/")
+            # Reemplazar caracteres especiales y forzar guardado lineal
+            ruta_destino = os.path.join(ruta_carpeta, archivo.name).replace("\\", "/")
             with open(ruta_destino, "wb") as f:
                 f.write(archivo.getbuffer())
-        st.sidebar.success(f"¡{len(archivos_correo)} archivo(s) procesados!")
+        st.sidebar.success("¡Documentos transferidos e integrados con éxito!")
         st.rerun()
+# --- MONITOR EN TIEMPO REAL DE ARCHIVOS DISPONIBLES ---
+st.sidebar.subheader("🗂️ Archivos Guardados en Servidor")
+archivos_en_servidor = glob.glob(os.path.join(ruta_carpeta, "*.xls"))
 
-# Selectores de tolerancia y tiempos
+if archivos_en_servidor:
+    # Mostrar lista compacta y ordenada con los nombres de los archivos actuales
+    nombres_archivos = [os.path.basename(a) for a in sorted(archivos_en_servidor)]
+    st.sidebar.caption(f"Actualmente hay **{len(nombres_archivos)} archivos** listos para procesar:")
+    for nombre in nombres_archivos:
+        st.sidebar.markdown(f"- 📄 `{nombre}`")
+else:
+    st.sidebar.warning("⚠️ La carpeta de asistencias está vacía. Sube tus archivos del correo arriba.")
+
+# Selectores de tolerancia horaria quincenal
 hora_limite_input = st.sidebar.time_input("Hora límite de Entrada:", value=datetime.strptime("08:01:00", "%H:%M:%S").time())
-# Cálculo dinámico de la quincena actual real del calendario
+# Cálculo dinámico automático del rango quincenal real del calendario
 hoy_real = datetime.now().date()
 if hoy_real.day <= 15:
     defecto_inicio = hoy_real.replace(day=1)
@@ -76,12 +87,11 @@ st.sidebar.subheader("📅 Fechas de la Quincena")
 fecha_inicio = st.sidebar.date_input("Fecha Inicio:", value=defecto_inicio)
 fecha_fin = st.sidebar.date_input("Fecha Fin:", value=defecto_fin)
 
-# Renderizado del Logotipo corporativo al 30% de la pantalla
+# Renderizado del Logotipo corporativo al 30% del contenedor ancho
 logo_path = "LOGOTIPO COLOR (1).jfif"
 if os.path.exists(logo_path):
     col_izq, col_logo, col_der = st.columns([0.35, 0.30, 0.35])
-    with col_logo:
-        st.image(logo_path, use_container_width=True)
+    with col_logo: st.image(logo_path, use_container_width=True)
 else:
     st.title("Industria Sigrama - Control de Asistencias")
 
@@ -114,32 +124,48 @@ def aplicar_colores_matriz(val):
     return 'text-align: center;'
 @st.cache_data
 def procesar_base_asistencias(carpeta):
-    # Compatibilidad universal de rutas para servidores Linux Cloud
-    ruta_busqueda = os.path.join(carpeta, "*.xls")
-    ruta_busqueda = ruta_busqueda.replace("\\", "/")
-    
+    ruta_busqueda = os.path.join(carpeta, "*.xls").replace("\\", "/")
     archivos = glob.glob(ruta_busqueda)
     if not archivos: 
         return None
     listado = []
     for r in archivos:
         try:
-            df = pd.read_excel(r, skiprows=1, engine='xlrd')
+            df = pd.read_excel(r, engine='xlrd')
+            if '#Empleado' not in df.columns and df.shape[1] > 0:
+                df = pd.read_excel(r, skiprows=1, engine='xlrd')
+                
             df.columns = df.columns.str.strip().str.replace('\n', '').str.replace('\r', '')
-            df_limpio = pd.DataFrame()
-            df_limpio['#Empleado'] = df.iloc[:, 1]
-            df_limpio['Nombre del Empleado'] = df.iloc[:, 2]
+            col_id = [c for c in df.columns if 'Empleado' in str(c) or '#' in str(c)]
+            col_nom = [c for c in df.columns if 'Nombre' in str(c)]
             col_fecha = [c for c in df.columns if 'Fecha' in str(c)]
-            col_hora = [c for c in df.columns if 'Hora Entrada' in str(c)]
-            col_nave = [c for c in df.columns if 'Nave Entrada' in str(c)]
-            df_limpio['Fecha_Raw'] = df[col_fecha] if col_fecha else df.iloc[:, 4]
-            df_limpio['Hora Entrada Raw'] = df[col_hora] if col_hora else df.iloc[:, 6]
-            df_limpio['Nave Entrada'] = df[col_nave] if col_nave else df.iloc[:, 7]
+            col_hora = [c for c in df.columns if 'Hora' in str(c)]
+            col_nave = [c for c in df.columns if 'Nave' in str(c)]
+            
+            df_limpio = pd.DataFrame()
+            df_limpio['#Empleado'] = df[col_id[0]]
+            df_limpio['Nombre del Empleado'] = df[col_nom[0]]
+            df_limpio['Fecha_Raw'] = df[col_fecha[0]]
+            df_limpio['Hora Entrada Raw'] = df[col_hora[0]]
+            df_limpio['Nave Entrada'] = df[col_nave[0]]
+            
             df_limpio = df_limpio.dropna(subset=['#Empleado'])
             df_limpio['#Empleado'] = pd.to_numeric(df_limpio['#Empleado'], errors='coerce').dropna().astype(int).astype(str)
             listado.append(df_limpio)
-        except: 
-            continue
+        except:
+            try:
+                df = pd.read_excel(r, skiprows=0, engine='xlrd')
+                df.columns = df.columns.str.strip().str.replace('\n', '').str.replace('\r', '')
+                df_limpio = pd.DataFrame()
+                df_limpio['#Empleado'] = df.iloc[:, 1]
+                df_limpio['Nombre del Empleado'] = df.iloc[:, 2]
+                df_limpio['Fecha_Raw'] = df.iloc[:, 4]
+                df_limpio['Hora Entrada Raw'] = df.iloc[:, 6]
+                df_limpio['Nave Entrada'] = df.iloc[:, 7]
+                df_limpio = df_limpio.dropna(subset=['#Empleado'])
+                df_limpio['#Empleado'] = pd.to_numeric(df_limpio['#Empleado'], errors='coerce').dropna().astype(int).astype(str)
+                listado.append(df_limpio)
+            except: continue
     if listado:
         df_master = pd.concat(listado, ignore_index=True)
         df_master['Fecha_Clean'] = pd.to_datetime(df_master['Fecha_Raw'], errors='coerce', dayfirst=True).dt.date
@@ -150,7 +176,7 @@ tab_reporte, tab_areas = st.tabs(["📊 Pre-Nómina y Reportes", "🗂️ Asigna
 AREAS_LISTA_RAW = ["⚪ Sin Asignar", "👑 Dirección", "⚙️ Ingeniería", "🔍 Calidad", "📐 Doblez", "✂️ Corte Laser", "🎨 Pintura", "📦 Embarque"]
 
 with tab_areas:
-    st.subheader("📝 Panel de Control de Plantilla y Estructura Organizacional")
+    st.subheader("📝 Catálogo Maestro de Personal")
     
     df_db = pd.read_sql_query("SELECT id_empleado, nombre, area FROM empleados", conn)
     df_db['id_empleado'] = df_db['id_empleado'].astype(str).str.strip()
@@ -168,7 +194,6 @@ with tab_areas:
         df_db = pd.read_sql_query("SELECT id_empleado, nombre, area FROM empleados", conn)
         df_db['id_empleado'] = df_db['id_empleado'].astype(str).str.strip()
         df_db = df_db[df_db['id_empleado'] != 'nan']
-    st.markdown("#### Catálogo Maestro de Personal")
     df_editor = st.data_editor(
         df_db,
         column_config={
@@ -194,8 +219,7 @@ with tab_areas:
             conn.commit()
             st.success("¡Base de datos actualizada correctamente!")
             st.rerun()
-        except Exception as e:
-            st.error(f"Error al guardar cambios: {e}")
+        except Exception as e: st.error(f"Error: {e}")
     st.markdown("---")
     st.markdown("#### 📥 Importación Masiva de Personal")
     col_down, col_up = st.columns(2)
@@ -206,8 +230,7 @@ with tab_areas:
         with pd.ExcelWriter(buffer_plantilla, engine='xlsxwriter') as writer:
             df_plantilla.to_excel(writer, index=False, sheet_name='Plantilla')
         st.download_button(
-            label="⬇️ Descargar Plantilla Oficial (.xlsx)",
-            data=buffer_plantilla.getvalue(),
+            label="⬇️ Descargar Plantilla Oficial (.xlsx)", data=buffer_plantilla.getvalue(),
             file_name="plantilla_carga_personal_sigrama.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
@@ -221,32 +244,16 @@ with tab_areas:
                 if "id_empleado" in df_cargado.columns and "nombre" in df_cargado.columns:
                     df_cargado['area'] = df_cargado['area'].fillna("⚪ Sin Asignar").str.strip()
                     for _, row in df_cargado.iterrows():
-                        id_c = str(row['id_empleado']).strip()
-                        nom_c = str(row['nombre']).strip()
-                        ar_c = str(row['area']).strip()
+                        id_c, nom_c, ar_c = str(row['id_empleado']).strip(), str(row['nombre']).strip(), str(row['area']).strip()
                         if ar_c not in AREAS_LISTA_RAW: ar_c = "⚪ Sin Asignar"
-                        if id_c and id_c != 'nan':
-                            conn.execute("INSERT OR REPLACE INTO empleados VALUES (?, ?, ?)", (id_c, nom_c, ar_c))
-                    conn.commit()
-                    st.success("¡Personal importado e integrado con éxito!")
-                    st.rerun()
+                        if id_c and id_c != 'nan': conn.execute("INSERT OR REPLACE INTO empleados VALUES (?, ?, ?)", (id_c, nom_c, ar_c))
+                    conn.commit(); st.success("¡Personal importado con éxito!"); st.rerun()
             except Exception as e: st.error(f"Error: {e}")
-def dibujar_reloj_donut(porcentaje, titulo, color_linea):
-    fig = go.Figure(data=[go.Pie(
-        labels=['Cumplimiento', 'Restante'],
-        values=[porcentaje, max(0, 100 - porcentaje)],
-        hole=.75,
-        marker=dict(colors=[color_linea, '#f2f2f2']),
-        textinfo='none',
-        hoverinfo='none'
-    )])
-    fig.update_layout(
-        title=dict(text=f"<b>{titulo}</b>", x=0.5, y=0.05, xanchor='center', font=dict(size=14)),
-        showlegend=False, margin=dict(t=10, b=40, l=10, r=10), height=180, width=180,
-        annotations=[dict(text=f"<b>{int(porcentaje)}%</b>", x=0.5, y=0.5, font=dict(size=20), showarrow=False)]
-    )
-    return fig
 
+def dibujar_reloj_donut(porcentaje, titulo, color_linea):
+    fig = go.Figure(data=[go.Pie(labels=['Cumplimiento', 'Restante'], values=[porcentaje, max(0, 100 - porcentaje)], hole=.75, marker=dict(colors=[color_linea, '#f2f2f2']), textinfo='none', hoverinfo='none')])
+    fig.update_layout(title=dict(text=f"<b>{titulo}</b>", x=0.5, y=0.05, xanchor='center', font=dict(size=14)), showlegend=False, margin=dict(t=10, b=40, l=10, r=10), height=180, width=180, annotations=[dict(text=f"<b>{int(porcentaje)}%</b>", x=0.5, y=0.5, font=dict(size=20), showarrow=False)])
+    return fig
 with tab_reporte:
     if os.path.exists(ruta_carpeta):
         df_raw = procesar_base_asistencias(ruta_carpeta)
@@ -256,6 +263,7 @@ with tab_reporte:
             curr = fecha_inicio
             while curr <= fecha_fin:
                 lista_dias.append(curr); curr += timedelta(days=1)
+                
             codigos = []
             for _, fila in df_raw.iterrows():
                 nave = str(fila.get('Nave Entrada', '')).strip().upper()
@@ -263,27 +271,27 @@ with tab_reporte:
                 elif fila['util_hora'] > hora_limite_input: codigos.append("R")
                 else: codigos.append("A")
             df_raw['Cod_Incidencia'] = codigos
+            
             df_raw['Dia_Num'] = pd.to_datetime(df_raw['Fecha_Clean']).dt.day
             df_raw['Fecha_date'] = pd.to_datetime(df_raw['Fecha_Clean'], errors='coerce').dt.date
             
-            # FILTRO CRÍTICO REAL: Mapeo directo contra tus fechas del panel izquierdo
             df_raw_filtrado = df_raw[(df_raw['Fecha_date'] >= fecha_inicio) & (df_raw['Fecha_date'] <= fecha_fin)]
             columnas_dias_str = [str(d.day) for d in lista_dias]
             
             if df_raw_filtrado.empty:
-                st.info("💡 **Aviso del Sistema:** No se encontraron asistencias en el rango de fechas seleccionado. Verifica el periodo en el panel izquierdo.")
+                st.info("💡 **Aviso del Sistema:** No se encontraron asistencias en el rango de fechas seleccionado. Ajusta el periodo en la barra lateral.")
             else:
                 matriz = df_raw_filtrado.pivot_table(index=['#Empleado', 'Nombre del Empleado'], columns='Dia_Num', values='Cod_Incidencia', aggfunc='first')
                 for col_dia in [d.day for d in lista_dias]:
                     if col_dia not in matriz.columns: matriz[col_dia] = None
                 matriz = matriz[[d.day for d in lista_dias]]
                 matriz_final = matriz.copy().reset_index()
+                
                 for d in lista_dias:
                     num_dia = d.day
                     if d.weekday() == 5: matriz_final[num_dia] = matriz_final[num_dia].fillna("S")
                     elif d.weekday() == 6: matriz_final[num_dia] = matriz_final[num_dia].fillna("D")
                     else: matriz_final[num_dia] = matriz_final[num_dia].fillna("F")
-
                 puntualidades, asistencias, desempenos = [], [], []
                 global_f, global_r, global_a = 0, 0, 0
                 for idx, fila in matriz_final.iterrows():
@@ -295,26 +303,22 @@ with tab_reporte:
                     puntualidades.append(f"{((a + r - r) / (a + r) * 100) if (a + r) > 0 else 0:.0f}%")
                     desempenos.append("40%" if f > 0 else ("70%" if r > 0 else "100%"))
 
-                matriz_final['PUNTUALIDAD'] = puntualidades
-                matriz_final['ASISTENCIA'] = asistencias
-                matriz_final['DESEMPEÑO'] = desempenos
-                matriz_final.columns = [str(c) for c in matriz_final.columns]
-                matriz_final['#Empleado'] = matriz_final['#Empleado'].astype(str).str.strip()
+                matriz_final['PUNTUALIDAD'] = puntualidades; matriz_final['ASISTENCIA'] = asistencias; matriz_final['DESEMPEÑO'] = desempenos
+                matriz_final.columns = [str(c) for c in matriz_final.columns]; matriz_final['#Empleado'] = matriz_final['#Empleado'].astype(str).str.strip()
                 df_db_mapping = pd.read_sql_query("SELECT id_empleado, area FROM empleados", conn)
                 df_db_mapping['id_empleado'] = df_db_mapping['id_empleado'].astype(str).str.strip()
                 matriz_final = matriz_final.merge(df_db_mapping, left_on='#Empleado', right_on='id_empleado', how='left')
                 matriz_final['area'] = matriz_final['area'].fillna("⚪ Sin Asignar").str.strip()
-                for v_viejo, v_nuevo in [("Sin Asignar", "⚪ Sin Asignar"), ("Corte Laser", "✂️ Corte Laser"), ("Doblez", "📐 Doblez"), ("Pintura", "🎨 Pintura"), ("Embarque", "📦 Embarque"), ("Calidad", "🔍 Calidad"), ("Dirección", "👑 Dirección"), ("Ingeniería", "⚙️ Ingeniería")]:
-                    matriz_final.loc[matriz_final['area'] == v_viejo, 'area'] = v_nuevo
+                for vv, vn in [("Sin Asignar", "⚪ Sin Asignar"), ("Corte Laser", "✂️ Corte Laser"), ("Doblez", "📐 Doblez"), ("Pintura", "🎨 Pintura"), ("Embarque", "📦 Embarque"), ("Calidad", "🔍 Calidad"), ("Dirección", "👑 Dirección"), ("Ingeniería", "⚙️ Ingeniería")]: matriz_final.loc[matriz_final['area'] == vv, 'area'] = vn
 
                 st.subheader("📊 Dashboard Global de Asistencias e Incidencias")
-                g_total_laborable = global_a + global_r + global_f
-                g_asistencia_pct = ((g_total_laborable - global_f) / g_total_laborable * 100) if g_total_laborable > 0 else 0
-                g_puntualidad_pct = (global_a / (global_a + global_f + global_r) * 100) if (global_a + global_f + global_r) > 0 else 0
+                gt = global_a + global_r + global_f
+                ga_pct = ((gt - global_f) / gt * 100) if gt > 0 else 0
+                gp_pct = (global_a / (global_a + global_f + global_r) * 100) if (global_a + global_f + global_r) > 0 else 0
                 col_d1, col_d2, col_d3, col_d4 = st.columns(4)
-                with col_d1: st.plotly_chart(dibujar_reloj_donut(g_asistencia_pct, "Asistencia Institucional", "#ffa500"), use_container_width=False)
-                with col_d2: st.plotly_chart(dibujar_reloj_donut(g_puntualidad_pct, "Puntualidad Global", "#00a2e8"), use_container_width=False)
-                with col_d3: st.plotly_chart(dibujar_reloj_donut(max(0, 100 - g_asistencia_pct), "Tasa Ausentismo", "#ff0000"), use_container_width=False)
+                with col_d1: st.plotly_chart(dibujar_reloj_donut(ga_pct, "Asistencia Institucional", "#ffa500"), use_container_width=False)
+                with col_d2: st.plotly_chart(dibujar_reloj_donut(gp_pct, "Puntualidad Global", "#00a2e8"), use_container_width=False)
+                with col_d3: st.plotly_chart(dibujar_reloj_donut(max(0, 100 - ga_pct), "Tasa Ausentismo", "#ff0000"), use_container_width=False)
                 with col_d4: st.markdown("<br>", unsafe_allow_html=True); st.metric("Total Colaboradores", f"{len(matriz_final)} Activos"); st.metric("Inasistencias Quincena", f"{global_f} Faltas")
 
                 st.write("---"); st.subheader("🏭 Desglose Estructurado y Matrices por Área Operativa")
@@ -369,6 +373,7 @@ with tab_reporte:
                         ws.write_blank(fila_firmas + 4, 5, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 4, fila_firmas + 5, 7, "FIRMA DIRECTOR GENERAL", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
                         ws.write_blank(fila_firmas + 4, 16, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 14, fila_firmas + 5, 18, "FIRMA GERENTE DE ÁREA", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
                         ws.write(fila_firmas + 8, 0, "FO-SGC-02          PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
+
                     for ar in AREAS_LISTA_RAW:
                         df_area_actual = matriz_final[matriz_final['area'] == ar]
                         if not df_area_actual.empty:
