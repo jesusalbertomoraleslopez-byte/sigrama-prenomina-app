@@ -39,21 +39,26 @@ ruta_carpeta = "./asistencias"
 if not os.path.exists(ruta_carpeta):
     os.makedirs(ruta_carpeta)
 
-# --- CARGADOR DE ARCHIVOS DE CORREO DIRECTO A LA APP ---
+# --- CARGADOR DE ARCHIVOS EN ESPERA ---
 st.sidebar.subheader("📥 Cargar Asistencias del Correo")
 archivos_correo = st.sidebar.file_uploader(
     "Arrastra aquí tus archivos .xls descargados:", 
     type=["xls"], 
     accept_multiple_files=True,
-    help="Puedes seleccionar y subir varios archivos diarios al mismo tiempo."
+    help="Selecciona todos los archivos diarios de la quincena."
 )
 
+# Botón de impulso para procesar los documentos cargados
 if archivos_correo:
-    for archivo in archivos_correo:
-        ruta_destino = os.path.join(ruta_carpeta, archivo.name)
-        with open(ruta_destino, "wb") as f:
-            f.write(archivo.getbuffer())
-    st.sidebar.success(f"¡{len(archivos_correo)} archivo(s) guardado(s) con éxito!")
+    st.sidebar.info(f"📋 {len(archivos_correo)} archivo(s) en espera.")
+    if st.sidebar.button("💾 Procesar y Guardar Asistencias", use_container_width=True):
+        for archivo in archivos_correo:
+            ruta_destino = os.path.join(ruta_carpeta, archivo.name)
+            ruta_destino = ruta_destino.replace("\\", "/")
+            with open(ruta_destino, "wb") as f:
+                f.write(archivo.getbuffer())
+        st.sidebar.success(f"¡{len(archivos_correo)} archivo(s) procesados!")
+        st.rerun()
 
 # Selectores de tolerancia y tiempos
 hora_limite_input = st.sidebar.time_input("Hora límite de Entrada:", value=datetime.strptime("08:01:00", "%H:%M:%S").time())
@@ -368,7 +373,6 @@ with tab_reporte:
                         ws.write_blank(fila_firmas + 4, 5, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 4, fila_firmas + 5, 7, "FIRMA DIRECTOR GENERAL", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
                         ws.write_blank(fila_firmas + 4, 16, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 14, fila_firmas + 5, 18, "FIRMA GERENTE DE ÁREA", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
                         ws.write(fila_firmas + 8, 0, "FO-SGC-02          PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
-
                     for ar in AREAS_LISTA_RAW:
                         df_area_actual = matriz_final[matriz_final['area'] == ar]
                         if not df_area_actual.empty:
