@@ -34,6 +34,66 @@ def conectar_db():
     return conn
 
 conn = conectar_db()
+st.sidebar.header("⚙️ Configuración del Periodo")
+ruta_carpeta = "./asistencias"
+
+if not os.path.exists(ruta_carpeta):
+    os.makedirs(ruta_carpeta)
+
+# --- CONEXIÓN DE SEGURIDAD AUTOMÁTICA CON STREAMLIT SECRETS ---
+try:
+    GITHUB_TOKEN = st.secrets["github"]["token"]
+except:
+    GITHUB_TOKEN = None
+
+REPO_NAME = "jesusalbertomoraleslopez-byte/sigrama-prenomina-app"
+
+# Cargador de archivos en espera
+st.sidebar.subheader("📥 Cargar Nuevas Asistencias")
+archivos_correo = st.sidebar.file_uploader(
+    "Arrastra aquí tus archivos .xls del correo:", 
+    type=["xls"], 
+    accept_multiple_files=True
+)
+if archivos_correo:
+    st.sidebar.info(f"📋 {len(archivos_correo)} archivo(s) listos.")
+    if st.sidebar.button("🚀 Subir y Guardar directamente en GitHub", use_container_width=True):
+        if not GITHUB_TOKEN:
+            st.sidebar.error("⚠️ Error: No se encontró el Token de GitHub en los Secrets de Streamlit. Configúralo en la nube.")
+        else:
+            exitos = 0
+            for archivo in archivos_correo:
+                ruta_local = os.path.join(ruta_carpeta, archivo.name).replace("\\", "/")
+                contenido_bytes = archivo.getbuffer()
+                with open(ruta_local, "wb") as f:
+                    f.write(contenido_bytes)
+                
+                url_api = f"https://github.com{REPO_NAME}/contents/asistencias/{archivo.name}"
+                headers = {
+                    "Authorization": f"token {GITHUB_TOKEN}",
+                    "Accept": "application/vnd.github.v3+json"
+                }
+                
+                sha = None
+                res_get = requests.get(url_api, headers=headers)
+                if res_get.status_code == 200:
+                    sha = res_get.json().get("sha")
+                
+                contenido_base64 = base64.b64encode(contenido_bytes).decode("utf-8")
+                payload = {
+                    "message": f"Carga de asistencia diaria: {archivo.name}",
+                    "content": contenido_base64
+                }
+                if sha:
+                    payload["sha"] = sha
+                
+                res_put = requests.put(url_api, json=payload, headers=headers)
+                if res_put.status_code in [200, 201]:
+                    exitos += 1
+            
+            if exitos > 0:
+                st.sidebar.success(f"¡{exitos} archivo(s) sincronizado(s) en GitHub con éxito!")
+                st.rerun()
 
 def limpiar_registro_hora(valor_celda):
     if pd.isna(valor_celda) or str(valor_celda).strip() == "":
@@ -42,7 +102,7 @@ def limpiar_registro_hora(valor_celda):
     if "1900" in texto_hora:
         componentes = texto_hora.split(" ")
         if len(componentes) >= 3:
-            texto_hora = componentes + " " + " ".join(componentes[2:])
+            texto_hora = componentes[0] + " " + " ".join(componentes[2:])
     texto_hora = texto_hora.replace("a. m.", "AM").replace("p. m.", "PM").replace("a.m.", "AM").replace("p.m.", "PM")
     try:
         return pd.to_datetime(texto_hora, format="%I:%M:%S %p").time()
@@ -107,7 +167,7 @@ def dibujar_reloj_donut(porcentaje, titulo, color_linea):
     return fig
 hora_limite_input = st.sidebar.time_input("Hora límite de Entrada:", value=datetime.strptime("08:01:00", "%H:%M:%S").time())
 
-# Cálculo dinámico de la quincena actual real del calendario (Mayo de 2026)
+# Cálculo dinámico de la quincena actual real del calendario (Año 2026)
 hoy_real = datetime.now().date()
 if hoy_real.day <= 15:
     defecto_inicio = hoy_real.replace(day=1)
@@ -304,8 +364,8 @@ with tab_reporte:
                         ws.write(fila_firmas, 1, "ASISTENCIA= A\nTIEMPO EXTRA= TE\nTRABAJO FORANEO= TF\nPERMISO= P\nFALTA= F\nVACACIONES= V\nINCAPACIDAD= I\nBONO PUNTUALIDAD= SÍ O NO\nBONO ASISTENCIA= SÍ O NO\nBONO DESEMPEÑO= 50, 75 ó 100%", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
                         ws.write(fila_firmas, 13, "NO LABORABLE CONVENIO= NLC\nDÍA FESTIVO LABORADO= DFL\nDIA DE DESCANSO LABORADO= DDL\nTIEMPO POR TIEMPO= TxT\nPERMISO SIN GOCE DE SUELDO= PSG\nSÁBADO= S\nDOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
                         fmt_linea_firma = workbook.add_format({'top': 1, 'top_color': '#000000', 'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
-                        ws.write_blank(fila_firmas + 4, 5, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 4, fila_linea_firma + 5, 7, "FIRMA DIRECTOR GENERAL", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
-                        ws.write_blank(fila_firmas + 4, 16, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 14, fila_linea_firma + 5, 18, "FIRMA GERENTE DE ÁREA", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+                        ws.write_blank(fila_firmas + 4, 5, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 4, fila_firmas + 5, 7, "FIRMA DIRECTOR GENERAL", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+                        ws.write_blank(fila_firmas + 4, 16, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 14, fila_firmas + 5, 18, "FIRMA GERENTE DE ÁREA", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
                         ws.write(fila_firmas + 8, 0, "FO-SGC-02          PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
 
                     for ar in AREAS_LISTA_RAW:
@@ -322,4 +382,3 @@ with tab_reporte:
                 st.download_button(label="📄 Descargar Reporte FO-RHU-23 Dividido por Áreas (.xlsx)", data=buffer_excel.getvalue(), file_name=f"FO-RHU-23_PRENOMINA_POR_AREAS_{fecha_fin.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         else: st.warning("⚠️ No se encontraron archivos de asistencia procesables en la ruta.")
     else: st.info("💡 Ingresa la ruta de la carpeta con los archivos en el panel izquierdo para comenzar el análisis.")
-
