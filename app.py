@@ -1,3 +1,4 @@
+
 # ==============================================================================
 # PORTAL DE CAPITAL HUMANO - INDUSTRIA SIGRAMA S.A. DE C.V. (FORMATO FO-RHU-23)
 # ==============================================================================
@@ -40,7 +41,7 @@ ruta_carpeta = "./asistencias"
 if not os.path.exists(ruta_carpeta):
     os.makedirs(ruta_carpeta)
 
-# --- CONEXIÓN DE SEGURIDAD AUTOMÁTICA CON STREAMLIT SECRETS ---
+# --- RECONOCIMIENTO DEL TOKEN DESDE SECRETS ---
 try:
     GITHUB_TOKEN = st.secrets["github"]["token"]
 except:
@@ -59,7 +60,7 @@ if archivos_correo:
     st.sidebar.info(f"📋 {len(archivos_correo)} archivo(s) listos.")
     if st.sidebar.button("🚀 Subir y Guardar directamente en GitHub", use_container_width=True):
         if not GITHUB_TOKEN:
-            st.sidebar.error("⚠️ Error: No se encontró el Token de GitHub en los Secrets de Streamlit. Configúralo en la nube.")
+            st.sidebar.error("⚠️ Error: No se encontró el Token en los Secrets.")
         else:
             exitos = 0
             for archivo in archivos_correo:
@@ -71,14 +72,17 @@ if archivos_correo:
                 url_api = f"https://github.com{REPO_NAME}/contents/asistencias/{archivo.name}"
                 headers = {
                     "Authorization": f"token {GITHUB_TOKEN}",
-                    "Accept": "application/vnd.github.v3+json"
+                    "Accept": "application/vnd.github.v3+json",
+                    "User-Agent": "Streamlit-App"
                 }
                 
                 sha = None
-                res_get = requests.get(url_api, headers=headers)
-                if res_get.status_code == 200:
-                    sha = res_get.json().get("sha")
-                
+                try:
+                    res_get = requests.get(url_api, headers=headers, timeout=10)
+                    if res_get.status_code == 200:
+                        sha = res_get.json().get("sha")
+                except:
+                    pass
                 contenido_base64 = base64.b64encode(contenido_bytes).decode("utf-8")
                 payload = {
                     "message": f"Carga de asistencia diaria: {archivo.name}",
@@ -87,13 +91,42 @@ if archivos_correo:
                 if sha:
                     payload["sha"] = sha
                 
-                res_put = requests.put(url_api, json=payload, headers=headers)
-                if res_put.status_code in [200, 201]:
-                    exitos += 1
+                try:
+                    res_put = requests.put(url_api, json=payload, headers=headers, timeout=15)
+                    if res_put.status_code in [200, 201]:
+                        exitos += 1
+                except:
+                    pass
             
             if exitos > 0:
-                st.sidebar.success(f"¡{exitos} archivo(s) sincronizado(s) en GitHub con éxito!")
+                st.sidebar.success(f"¡{exitos} archivo(s) guardado(s) en GitHub!")
                 st.rerun()
+hora_limite_input = st.sidebar.time_input("Hora límite de Entrada:", value=datetime.strptime("08:01:00", "%H:%M:%S").time())
+
+# Cálculo dinámico de la quincena actual real del calendario (Año 2026)
+hoy_real = datetime.now().date()
+if hoy_real.day <= 15:
+    defecto_inicio = hoy_real.replace(day=1)
+    defecto_fin = hoy_real.replace(day=15)
+else:
+    defecto_inicio = hoy_real.replace(day=16)
+    siguiente_mes = hoy_real.replace(day=28) + timedelta(days=4)
+    defecto_fin = siguiente_mes - timedelta(days=siguiente_mes.day)
+
+st.sidebar.subheader("📅 Fechas de la Quincena")
+fecha_inicio = st.sidebar.date_input("Fecha Inicio:", value=defecto_inicio)
+fecha_fin = st.sidebar.date_input("Fecha Fin:", value=defecto_fin)
+# Renderizado del Logotipo corporativo al 30% de la pantalla
+logo_path = "LOGOTIPO COLOR (1).jfif"
+if os.path.exists(logo_path):
+    col_izq, col_logo, col_der = st.columns([0.35, 0.30, 0.35])
+    with col_logo:
+        st.image(logo_path, use_container_width=True)
+else:
+    st.title("Industria Sigrama - Control de Asistencias")
+
+st.markdown("<h3 style='text-align: center;'>👥 Portal de Capital Humano: Formato FO-RHU-23</h3>", unsafe_allow_html=True)
+st.markdown("---")
 
 def limpiar_registro_hora(valor_celda):
     if pd.isna(valor_celda) or str(valor_celda).strip() == "":
@@ -102,7 +135,7 @@ def limpiar_registro_hora(valor_celda):
     if "1900" in texto_hora:
         componentes = texto_hora.split(" ")
         if len(componentes) >= 3:
-            texto_hora = componentes[0] + " " + " ".join(componentes[2:])
+            texto_hora = componentes + " " + " ".join(componentes[2:])
     texto_hora = texto_hora.replace("a. m.", "AM").replace("p. m.", "PM").replace("a.m.", "AM").replace("p.m.", "PM")
     try:
         return pd.to_datetime(texto_hora, format="%I:%M:%S %p").time()
@@ -111,7 +144,6 @@ def limpiar_registro_hora(valor_celda):
             return pd.to_datetime(texto_hora, format="%H:%M:%S").time()
         except:
             return valor_celda.time() if hasattr(valor_celda, 'time') else None
-
 def aplicar_colores_matriz(val):
     if val in ["A", "R"]:
         return 'background-color: #d4edda; color: #155724; font-weight: bold; text-align: center;'
@@ -120,6 +152,20 @@ def aplicar_colores_matriz(val):
     elif val in ["S", "D"]:
         return 'background-color: #fff3cd; color: #856404; font-weight: bold; text-align: center;'
     return 'text-align: center;'
+
+def dibujar_reloj_donut(porcentaje, titulo, color_linea):
+    fig = go.Figure(data=[go.Pie(
+        labels=['Cumplimiento', 'Restante'],
+        values=[porcentaje, max(0, 100 - porcentaje)],
+        hole=.75, marker=dict(colors=[color_linea, '#f2f2f2']),
+        textinfo='none', hoverinfo='none'
+    )])
+    fig.update_layout(
+        title=dict(text=f"<b>{titulo}</b>", x=0.5, y=0.05, xanchor='center', font=dict(size=14)),
+        showlegend=False, margin=dict(t=10, b=40, l=10, r=10), height=180, width=180,
+        annotations=[dict(text=f"<b>{int(porcentaje)}%</b>", x=0.5, y=0.5, font=dict(size=20), showarrow=False)]
+    )
+    return fig
 @st.cache_data
 def procesar_base_asistencias(carpeta):
     ruta_busqueda = os.path.join(carpeta, "*.xls").replace("\\", "/")
@@ -150,48 +196,36 @@ def procesar_base_asistencias(carpeta):
         df_master['Fecha_Clean'] = pd.to_datetime(df_master['Fecha_Raw'], errors='coerce', dayfirst=True).dt.date
         return df_master
     return None
-def dibujar_reloj_donut(porcentaje, titulo, color_linea):
-    fig = go.Figure(data=[go.Pie(
-        labels=['Cumplimiento', 'Restante'],
-        values=[porcentaje, max(0, 100 - porcentaje)],
-        hole=.75,
-        marker=dict(colors=[color_linea, '#f2f2f2']),
-        textinfo='none',
-        hoverinfo='none'
-    )])
-    fig.update_layout(
-        title=dict(text=f"<b>{titulo}</b>", x=0.5, y=0.05, xanchor='center', font=dict(size=14)),
-        showlegend=False, margin=dict(t=10, b=40, l=10, r=10), height=180, width=180,
-        annotations=[dict(text=f"<b>{int(porcentaje)}%</b>", x=0.5, y=0.5, font=dict(size=20), showarrow=False)]
-    )
-    return fig
-hora_limite_input = st.sidebar.time_input("Hora límite de Entrada:", value=datetime.strptime("08:01:00", "%H:%M:%S").time())
-
-# Cálculo dinámico de la quincena actual real del calendario (Año 2026)
-hoy_real = datetime.now().date()
-if hoy_real.day <= 15:
-    defecto_inicio = hoy_real.replace(day=1)
-    defecto_fin = hoy_real.replace(day=15)
-else:
-    defecto_inicio = hoy_real.replace(day=16)
-    siguiente_mes = hoy_real.replace(day=28) + timedelta(days=4)
-    defecto_fin = siguiente_mes - timedelta(days=siguiente_mes.day)
-
-st.sidebar.subheader("📅 Fechas de la Quincena")
-fecha_inicio = st.sidebar.date_input("Fecha Inicio:", value=defecto_inicio)
-fecha_fin = st.sidebar.date_input("Fecha Fin:", value=defecto_fin)
-
-# Renderizado del Logotipo corporativo al 30% de la pantalla
-logo_path = "LOGOTIPO COLOR (1).jfif"
-if os.path.exists(logo_path):
-    col_izq, col_logo, col_der = st.columns([0.35, 0.30, 0.35])
-    with col_logo:
-        st.image(logo_path, use_container_width=True)
-else:
-    st.title("Industria Sigrama - Control de Asistencias")
-
-st.markdown("<h3 style='text-align: center;'>👥 Portal de Capital Humano: Formato FO-RHU-23</h3>", unsafe_allow_html=True)
-st.markdown("---")
+@st.cache_data
+def procesar_base_asistencias(carpeta):
+    ruta_busqueda = os.path.join(carpeta, "*.xls").replace("\\", "/")
+    archivos = glob.glob(ruta_busqueda)
+    if not archivos:
+        return None
+    listado = []
+    for r in archivos:
+        try:
+            df = pd.read_excel(r, skiprows=1, engine='xlrd')
+            df.columns = df.columns.str.strip().str.replace('\n', '').str.replace('\r', '')
+            df_limpio = pd.DataFrame()
+            df_limpio['#Empleado'] = df.iloc[:, 1]
+            df_limpio['Nombre del Empleado'] = df.iloc[:, 2]
+            col_fecha = [c for c in df.columns if 'Fecha' in str(c)]
+            col_hora = [c for c in df.columns if 'Hora Entrada' in str(c)]
+            col_nave = [c for c in df.columns if 'Nave Entrada' in str(c)]
+            df_limpio['Fecha_Raw'] = df[col_fecha] if col_fecha else df.iloc[:, 4]
+            df_limpio['Hora Entrada Raw'] = df[col_hora] if col_hora else df.iloc[:, 6]
+            df_limpio['Nave Entrada'] = df[col_nave] if col_nave else df.iloc[:, 7]
+            df_limpio = df_limpio.dropna(subset=['#Empleado'])
+            df_limpio['#Empleado'] = pd.to_numeric(df_limpio['#Empleado'], errors='coerce').dropna().astype(int).astype(str)
+            listado.append(df_limpio)
+        except:
+            continue
+    if listado:
+        df_master = pd.concat(listado, ignore_index=True)
+        df_master['Fecha_Clean'] = pd.to_datetime(df_master['Fecha_Raw'], errors='coerce', dayfirst=True).dt.date
+        return df_master
+    return None
 tab_reporte, tab_areas = st.tabs(["📊 Pre-Nómina y Reportes", "🗂️ Asignación de Áreas y Personal"])
 AREAS_LISTA_RAW = ["⚪ Sin Asignar", "👑 Dirección", "⚙️ Ingeniería", "🔍 Calidad", "📐 Doblez", "✂️ Corte Laser", "🎨 Pintura", "📦 Embarque"]
 
@@ -216,7 +250,6 @@ with tab_areas:
 
     st.markdown("#### Catálogo Maestro de Personal")
     df_editor = st.data_editor(df_db, column_config={"id_empleado": st.column_config.TextColumn("ID Empleado", required=True), "nombre": st.column_config.TextColumn("Nombre Completo del Colaborador", required=True), "area": st.column_config.SelectboxColumn("Área Operativa Asignada", options=AREAS_LISTA_RAW, required=True)}, num_rows="dynamic", use_container_width=True, key="maestro_personal_editor")
-
     if st.button("💾 Guardar Cambios ESTRUCTURALES de la Tabla"):
         try:
             conn.execute("DROP TABLE empleados")
@@ -228,6 +261,7 @@ with tab_areas:
                 if id_f and id_f != 'nan': conn.execute("INSERT OR REPLACE INTO empleados VALUES (?, ?, ?)", (id_f, nom_f, area_f))
             conn.commit(); st.success("¡Base de datos actualizada correctamente!"); st.rerun()
         except Exception as e: st.error(f"Error al guardar cambios: {e}")
+
     st.markdown("---")
     st.markdown("#### 📥 Importación Masiva de Personal")
     col_down, col_up = st.columns(2)
@@ -253,7 +287,6 @@ with tab_areas:
                         if id_c and id_c != 'nan': conn.execute("INSERT OR REPLACE INTO empleados VALUES (?, ?, ?)", (id_c, nom_c, ar_c))
                     conn.commit(); st.success("¡Personal importado con éxito!"); st.rerun()
             except Exception as e: st.error(f"Error: {e}")
-
 with tab_reporte:
     if os.path.exists(ruta_carpeta):
         df_raw = procesar_base_asistencias(ruta_carpeta)
@@ -304,8 +337,8 @@ with tab_reporte:
                 df_db_mapping['id_empleado'] = df_db_mapping['id_empleado'].astype(str).str.strip()
                 matriz_final = matriz_final.merge(df_db_mapping, left_on='#Empleado', right_on='id_empleado', how='left')
                 matriz_final['area'] = matriz_final['area'].fillna("⚪ Sin Asignar").str.strip()
-                for vv, vn in [("Sin Asignar", "⚪ Sin Asignar"), ("Corte Laser", "✂️ Corte Laser"), ("Doblez", "📐 Doblez"), ("Pintura", "🎨 Pintura"), ("Embarque", "📦 Embarque"), ("Calidad", "🔍 Calidad"), ("Dirección", "👑 Dirección"), ("Ingeniería", "⚙️ Ingeniería")]: 
-                    matriz_final.loc[matriz_final['area'] == vv, 'area'] = vn
+                for vv, vn in [("Sin Asignar", "⚪ Sin Asignar"), ("Corte Laser", "✂️ Corte Laser"), ("Doblez", "📐 Doblez"), ("Pintura", "🎨 Pintura"), ("Embarque", "📦 Embarque"), ("Calidad", "🔍 Calidad"), ("Dirección", "👑 Dirección"), ("Ingeniería", "⚙️ Ingeniería")]: matriz_final.loc[matriz_final['area'] == vv, 'area'] = vn
+
                 st.subheader("📊 Dashboard Global de Asistencias e Incidencias")
                 gt = global_a + global_r + global_f
                 ga_pct, gp_pct = (((gt - global_f) / gt * 100) if gt > 0 else 0), ((global_a / (global_a + global_f + global_r) * 100) if (global_a + global_f + global_r) > 0 else 0)
@@ -314,7 +347,6 @@ with tab_reporte:
                 with col_d2: st.plotly_chart(dibujar_reloj_donut(gp_pct, "Puntualidad Global", "#00a2e8"), use_container_width=False)
                 with col_d3: st.plotly_chart(dibujar_reloj_donut(max(0, 100 - ga_pct), "Tasa Ausentismo", "#ff0000"), use_container_width=False)
                 with col_d4: st.markdown("<br>", unsafe_allow_html=True); st.metric("Total Colaboradores", f"{len(matriz_final)} Activos"); st.metric("Inasistencias Quincena", f"{global_f} Faltas")
-
                 st.write("---"); st.subheader("🏭 Desglose Estructurado y Matrices por Área Operativa")
                 buffer_excel = io.BytesIO()
                 with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
@@ -332,6 +364,7 @@ with tab_reporte:
                     cols_mostrar = ['#Empleado', 'Nombre del Empleado'] + columnas_dias_str + ['PUNTUALIDAD', 'ASISTENCIA', 'DESEMPEÑO']
                     st.markdown("### 📋 Reporte General Consolidado"); st.dataframe(matriz_final[cols_mostrar].style.map(aplicar_colores_matriz, subset=columnas_dias_str), use_container_width=True)
                     lista_hojas_excel = [('CONSOLIDADO', matriz_final)] + [(ar.replace("👑 ", "").replace("⚙️ ", "").replace("🔍 ", "").replace("📐 ", "").replace("✂️ ", "").replace("🎨 ", "").replace("📦 ", "").replace("⚪ ", "")[:31], matriz_final[matriz_final['area'] == ar]) for ar in AREAS_LISTA_RAW]
+
                     for nombre_hoja, df_hoja in lista_hojas_excel:
                         if df_hoja.empty: continue
                         fila_inicio_datos = 4
