@@ -18,7 +18,6 @@ st.set_page_config(
     layout="wide", 
     page_icon="👥"
 )
-
 # Inicialización de Base de Datos SQLite local
 def conectar_db():
     conn = sqlite3.connect("catalogo_personal.db")
@@ -34,6 +33,74 @@ def conectar_db():
     return conn
 
 conn = conectar_db()
+def limpiar_registro_hora(valor_celda):
+    if pd.isna(valor_celda) or str(valor_celda).strip() == "":
+        return None
+    texto_hora = str(valor_celda).strip()
+    if "1900" in texto_hora:
+        componentes = texto_hora.split(" ")
+        if len(componentes) >= 3:
+            texto_hora = componentes + " " + " ".join(componentes[2:])
+    texto_hora = texto_hora.replace("a. m.", "AM").replace("p. m.", "PM").replace("a.m.", "AM").replace("p.m.", "PM")
+    try:
+        return pd.to_datetime(texto_hora, format="%I:%M:%S %p").time()
+    except:
+        try:
+            return pd.to_datetime(texto_hora, format="%H:%M:%S").time()
+        except:
+            return valor_celda.time() if hasattr(valor_celda, 'time') else None
+def aplicar_colores_matriz(val):
+    if val in ["A", "R"]:
+        return 'background-color: #d4edda; color: #155724; font-weight: bold; text-align: center;'
+    elif val == "F":
+        return 'background-color: #f8d7da; color: #721c24; font-weight: bold; text-align: center;'
+    elif val in ["S", "D"]:
+        return 'background-color: #fff3cd; color: #856404; font-weight: bold; text-align: center;'
+    return 'text-align: center;'
+
+def dibujar_reloj_donut(porcentaje, titulo, color_linea):
+    fig = go.Figure(data=[go.Pie(
+        labels=['Cumplimiento', 'Restante'],
+        values=[porcentaje, max(0, 100 - porcentaje)],
+        hole=.75, marker=dict(colors=[color_linea, '#f2f2f2']),
+        textinfo='none', hoverinfo='none'
+    )])
+    fig.update_layout(
+        title=dict(text=f"<b>{titulo}</b>", x=0.5, y=0.05, xanchor='center', font=dict(size=14)),
+        showlegend=False, margin=dict(t=10, b=40, l=10, r=10), height=180, width=180,
+        annotations=[dict(text=f"<b>{int(porcentaje)}%</b>", x=0.5, y=0.5, font=dict(size=20), showarrow=False)]
+    )
+    return fig
+@st.cache_data
+def procesar_base_asistencias(carpeta):
+    ruta_busqueda = os.path.join(carpeta, "*.xls").replace("\\", "/")
+    archivos = glob.glob(ruta_busqueda)
+    if not archivos:
+        return None
+    listado = []
+    for r in archivos:
+        try:
+            df = pd.read_excel(r, skiprows=1, engine='xlrd')
+            df.columns = df.columns.str.strip().str.replace('\n', '').str.replace('\r', '')
+            df_limpio = pd.DataFrame()
+            df_limpio['#Empleado'] = df.iloc[:, 1]
+            df_limpio['Nombre del Empleado'] = df.iloc[:, 2]
+            col_fecha = [c for c in df.columns if 'Fecha' in str(c)]
+            col_hora = [c for c in df.columns if 'Hora Entrada' in str(c)]
+            col_nave = [c for c in df.columns if 'Nave Entrada' in str(c)]
+            df_limpio['Fecha_Raw'] = df[col_fecha] if col_fecha else df.iloc[:, 4]
+            df_limpio['Hora Entrada Raw'] = df[col_hora] if col_hora else df.iloc[:, 6]
+            df_limpio['Nave Entrada'] = df[col_nave] if col_nave else df.iloc[:, 7]
+            df_limpio = df_limpio.dropna(subset=['#Empleado'])
+            df_limpio['#Empleado'] = pd.to_numeric(df_limpio['#Empleado'], errors='coerce').dropna().astype(int).astype(str)
+            listado.append(df_limpio)
+        except:
+            continue
+    if listado:
+        df_master = pd.concat(listado, ignore_index=True)
+        df_master['Fecha_Clean'] = pd.to_datetime(df_master['Fecha_Raw'], errors='coerce', dayfirst=True).dt.date
+        return df_master
+    return None
 st.sidebar.header("⚙️ Configuración del Periodo")
 ruta_carpeta = "./asistencias"
 
@@ -60,28 +127,23 @@ if archivos_correo:
         else:
             exitos = 0
             for archivo in archivos_correo:
-                # 1. Guardar localmente en el servidor temporal
                 ruta_local = os.path.join(ruta_carpeta, archivo.name).replace("\\", "/")
                 contenido_bytes = archivo.getbuffer()
                 with open(ruta_local, "wb") as f:
                     f.write(contenido_bytes)
                 
-                # 2. Subir directo a GitHub mediante la API REST v3
                 url_api = f"https://github.com{REPO_NAME}/contents/asistencias/{archivo.name}"
                 headers = {
                     "Authorization": f"token {GITHUB_TOKEN}",
                     "Accept": "application/vnd.github.v3+json"
                 }
                 
-                # Revisar si el archivo ya existe en GitHub para obtener su sha (actualización)
                 sha = None
                 res_get = requests.get(url_api, headers=headers)
                 if res_get.status_code == 200:
                     sha = res_get.json().get("sha")
                 
-                # Codificar el contenido del archivo de Excel a Base64 exigido por GitHub
                 contenido_base64 = base64.b64encode(contenido_bytes).decode("utf-8")
-                
                 payload = {
                     "message": f"Carga de asistencia diaria: {archivo.name}",
                     "content": contenido_base64
@@ -123,36 +185,6 @@ else:
 
 st.markdown("<h3 style='text-align: center;'>👥 Portal de Capital Humano: Formato FO-RHU-23</h3>", unsafe_allow_html=True)
 st.markdown("---")
-@st.cache_data
-def procesar_base_asistencias(carpeta):
-    ruta_busqueda = os.path.join(carpeta, "*.xls").replace("\\", "/")
-    archivos = glob.glob(ruta_busqueda)
-    if not archivos:
-        return None
-    listado = []
-    for r in archivos:
-        try:
-            df = pd.read_excel(r, skiprows=1, engine='xlrd')
-            df.columns = df.columns.str.strip().str.replace('\n', '').str.replace('\r', '')
-            df_limpio = pd.DataFrame()
-            df_limpio['#Empleado'] = df.iloc[:, 1]
-            df_limpio['Nombre del Empleado'] = df.iloc[:, 2]
-            col_fecha = [c for c in df.columns if 'Fecha' in str(c)]
-            col_hora = [c for c in df.columns if 'Hora Entrada' in str(c)]
-            col_nave = [c for c in df.columns if 'Nave Entrada' in str(c)]
-            df_limpio['Fecha_Raw'] = df[col_fecha] if col_fecha else df.iloc[:, 4]
-            df_limpio['Hora Entrada Raw'] = df[col_hora] if col_hora else df.iloc[:, 6]
-            df_limpio['Nave Entrada'] = df[col_nave] if col_nave else df.iloc[:, 7]
-            df_limpio = df_limpio.dropna(subset=['#Empleado'])
-            df_limpio['#Empleado'] = pd.to_numeric(df_limpio['#Empleado'], errors='coerce').dropna().astype(int).astype(str)
-            listado.append(df_limpio)
-        except:
-            continue
-    if listado:
-        df_master = pd.concat(listado, ignore_index=True)
-        df_master['Fecha_Clean'] = pd.to_datetime(df_master['Fecha_Raw'], errors='coerce', dayfirst=True).dt.date
-        return df_master
-    return None
 tab_reporte, tab_areas = st.tabs(["📊 Pre-Nómina y Reportes", "🗂️ Asignación de Áreas y Personal"])
 AREAS_LISTA_RAW = ["⚪ Sin Asignar", "👑 Dirección", "⚙️ Ingeniería", "🔍 Calidad", "📐 Doblez", "✂️ Corte Laser", "🎨 Pintura", "📦 Embarque"]
 
@@ -221,8 +253,7 @@ with tab_reporte:
             df_raw['util_hora'] = df_raw['Hora Entrada Raw'].apply(limpiar_registro_hora)
             lista_dias = []
             curr = fecha_inicio
-            while curr <= fecha_fin:
-                lista_dias.append(curr); curr += timedelta(days=1)
+            while curr <= fecha_fin: listga_dias.append(curr) if False else lista_dias.append(curr); curr += timedelta(days=1)
             codigos = []
             for _, fila in df_raw.iterrows():
                 nave = str(fila.get('Nave Entrada', '')).strip().upper()
@@ -232,11 +263,8 @@ with tab_reporte:
             df_raw['Cod_Incidencia'] = codigos
             df_raw['Dia_Num'] = pd.to_datetime(df_raw['Fecha_Clean']).dt.day
             df_raw['Fecha_date'] = pd.to_datetime(df_raw['Fecha_Clean'], errors='coerce').dt.date
-            
-            # FILTRADO QUINCENAL DIRECTO: Sincronización estricta de objetos date de Pandas con Streamlit
             df_raw_filtrado = df_raw[(df_raw['Fecha_date'] >= fecha_inicio) & (df_raw['Fecha_date'] <= fecha_fin)]
             columnas_dias_str = [str(d.day) for d in lista_dias]
-            
             if df_raw_filtrado.empty:
                 st.info("💡 **Aviso del Sistema:** No se encontraron asistencias en el rango de fechas seleccionado en la barra lateral.")
             else:
