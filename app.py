@@ -18,6 +18,7 @@ st.set_page_config(
     layout="wide", 
     page_icon="👥"
 )
+
 # Inicialización de Base de Datos SQLite local
 def conectar_db():
     conn = sqlite3.connect("catalogo_personal.db")
@@ -33,6 +34,7 @@ def conectar_db():
     return conn
 
 conn = conectar_db()
+
 def limpiar_registro_hora(valor_celda):
     if pd.isna(valor_celda) or str(valor_celda).strip() == "":
         return None
@@ -49,6 +51,7 @@ def limpiar_registro_hora(valor_celda):
             return pd.to_datetime(texto_hora, format="%H:%M:%S").time()
         except:
             return valor_celda.time() if hasattr(valor_celda, 'time') else None
+
 def aplicar_colores_matriz(val):
     if val in ["A", "R"]:
         return 'background-color: #d4edda; color: #155724; font-weight: bold; text-align: center;'
@@ -57,20 +60,6 @@ def aplicar_colores_matriz(val):
     elif val in ["S", "D"]:
         return 'background-color: #fff3cd; color: #856404; font-weight: bold; text-align: center;'
     return 'text-align: center;'
-
-def dibujar_reloj_donut(porcentaje, titulo, color_linea):
-    fig = go.Figure(data=[go.Pie(
-        labels=['Cumplimiento', 'Restante'],
-        values=[porcentaje, max(0, 100 - porcentaje)],
-        hole=.75, marker=dict(colors=[color_linea, '#f2f2f2']),
-        textinfo='none', hoverinfo='none'
-    )])
-    fig.update_layout(
-        title=dict(text=f"<b>{titulo}</b>", x=0.5, y=0.05, xanchor='center', font=dict(size=14)),
-        showlegend=False, margin=dict(t=10, b=40, l=10, r=10), height=180, width=180,
-        annotations=[dict(text=f"<b>{int(porcentaje)}%</b>", x=0.5, y=0.5, font=dict(size=20), showarrow=False)]
-    )
-    return fig
 @st.cache_data
 def procesar_base_asistencias(carpeta):
     ruta_busqueda = os.path.join(carpeta, "*.xls").replace("\\", "/")
@@ -101,66 +90,24 @@ def procesar_base_asistencias(carpeta):
         df_master['Fecha_Clean'] = pd.to_datetime(df_master['Fecha_Raw'], errors='coerce', dayfirst=True).dt.date
         return df_master
     return None
-st.sidebar.header("⚙️ Configuración del Periodo")
-ruta_carpeta = "./asistencias"
-
-if not os.path.exists(ruta_carpeta):
-    os.makedirs(ruta_carpeta)
-
-# --- CREDENCIALES OBLIGATORIAS DE GITHUB ---
-st.sidebar.subheader("🔑 Credenciales de GitHub")
-GITHUB_TOKEN = st.sidebar.text_input("Introduce tu Token de GitHub:", type="password", help="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")
-REPO_NAME = "jesusalbertomoraleslopez-byte/sigrama-prenomina-app"
-
-# Cargador de archivos en espera
-st.sidebar.subheader("📥 Cargar Nuevas Asistencias")
-archivos_correo = st.sidebar.file_uploader(
-    "Arrastra aquí tus archivos .xls del correo:", 
-    type=["xls"], 
-    accept_multiple_files=True
-)
-if archivos_correo:
-    st.sidebar.info(f"📋 {len(archivos_correo)} archivo(s) listos.")
-    if st.sidebar.button("🚀 Subir y Guardar directamente en GitHub", use_container_width=True):
-        if not GITHUB_TOKEN:
-            st.sidebar.error("⚠️ Falta introducir el Token de GitHub para autorizar la subida.")
-        else:
-            exitos = 0
-            for archivo in archivos_correo:
-                ruta_local = os.path.join(ruta_carpeta, archivo.name).replace("\\", "/")
-                contenido_bytes = archivo.getbuffer()
-                with open(ruta_local, "wb") as f:
-                    f.write(contenido_bytes)
-                
-                url_api = f"https://github.com{REPO_NAME}/contents/asistencias/{archivo.name}"
-                headers = {
-                    "Authorization": f"token {GITHUB_TOKEN}",
-                    "Accept": "application/vnd.github.v3+json"
-                }
-                
-                sha = None
-                res_get = requests.get(url_api, headers=headers)
-                if res_get.status_code == 200:
-                    sha = res_get.json().get("sha")
-                
-                contenido_base64 = base64.b64encode(contenido_bytes).decode("utf-8")
-                payload = {
-                    "message": f"Carga de asistencia diaria: {archivo.name}",
-                    "content": contenido_base64
-                }
-                if sha:
-                    payload["sha"] = sha
-                
-                res_put = requests.put(url_api, json=payload, headers=headers)
-                if res_put.status_code in [200, 201]:
-                    exitos += 1
-            
-            if exitos > 0:
-                st.sidebar.success(f"¡{exitos} archivo(s) sincronizado(s) en GitHub con éxito!")
-                st.rerun()
+def dibujar_reloj_donut(porcentaje, titulo, color_linea):
+    fig = go.Figure(data=[go.Pie(
+        labels=['Cumplimiento', 'Restante'],
+        values=[porcentaje, max(0, 100 - porcentaje)],
+        hole=.75,
+        marker=dict(colors=[color_linea, '#f2f2f2']),
+        textinfo='none',
+        hoverinfo='none'
+    )])
+    fig.update_layout(
+        title=dict(text=f"<b>{titulo}</b>", x=0.5, y=0.05, xanchor='center', font=dict(size=14)),
+        showlegend=False, margin=dict(t=10, b=40, l=10, r=10), height=180, width=180,
+        annotations=[dict(text=f"<b>{int(porcentaje)}%</b>", x=0.5, y=0.5, font=dict(size=20), showarrow=False)]
+    )
+    return fig
 hora_limite_input = st.sidebar.time_input("Hora límite de Entrada:", value=datetime.strptime("08:01:00", "%H:%M:%S").time())
 
-# Cálculo dinámico de la quincena actual real del calendario (Año 2026)
+# Cálculo dinámico de la quincena actual real del calendario (Mayo de 2026)
 hoy_real = datetime.now().date()
 if hoy_real.day <= 15:
     defecto_inicio = hoy_real.replace(day=1)
@@ -209,6 +156,7 @@ with tab_areas:
 
     st.markdown("#### Catálogo Maestro de Personal")
     df_editor = st.data_editor(df_db, column_config={"id_empleado": st.column_config.TextColumn("ID Empleado", required=True), "nombre": st.column_config.TextColumn("Nombre Completo del Colaborador", required=True), "area": st.column_config.SelectboxColumn("Área Operativa Asignada", options=AREAS_LISTA_RAW, required=True)}, num_rows="dynamic", use_container_width=True, key="maestro_personal_editor")
+
     if st.button("💾 Guardar Cambios ESTRUCTURALES de la Tabla"):
         try:
             conn.execute("DROP TABLE empleados")
@@ -220,7 +168,6 @@ with tab_areas:
                 if id_f and id_f != 'nan': conn.execute("INSERT OR REPLACE INTO empleados VALUES (?, ?, ?)", (id_f, nom_f, area_f))
             conn.commit(); st.success("¡Base de datos actualizada correctamente!"); st.rerun()
         except Exception as e: st.error(f"Error al guardar cambios: {e}")
-
     st.markdown("---")
     st.markdown("#### 📥 Importación Masiva de Personal")
     col_down, col_up = st.columns(2)
@@ -246,6 +193,7 @@ with tab_areas:
                         if id_c and id_c != 'nan': conn.execute("INSERT OR REPLACE INTO empleados VALUES (?, ?, ?)", (id_c, nom_c, ar_c))
                     conn.commit(); st.success("¡Personal importado con éxito!"); st.rerun()
             except Exception as e: st.error(f"Error: {e}")
+
 with tab_reporte:
     if os.path.exists(ruta_carpeta):
         df_raw = procesar_base_asistencias(ruta_carpeta)
@@ -253,7 +201,7 @@ with tab_reporte:
             df_raw['util_hora'] = df_raw['Hora Entrada Raw'].apply(limpiar_registro_hora)
             lista_dias = []
             curr = fecha_inicio
-            while curr <= fecha_fin: listga_dias.append(curr) if False else lista_dias.append(curr); curr += timedelta(days=1)
+            while curr <= fecha_fin: lista_dias.append(curr); curr += timedelta(days=1)
             codigos = []
             for _, fila in df_raw.iterrows():
                 nave = str(fila.get('Nave Entrada', '')).strip().upper()
@@ -296,8 +244,8 @@ with tab_reporte:
                 df_db_mapping['id_empleado'] = df_db_mapping['id_empleado'].astype(str).str.strip()
                 matriz_final = matriz_final.merge(df_db_mapping, left_on='#Empleado', right_on='id_empleado', how='left')
                 matriz_final['area'] = matriz_final['area'].fillna("⚪ Sin Asignar").str.strip()
-                for vv, vn in [("Sin Asignar", "⚪ Sin Asignar"), ("Corte Laser", "✂️ Corte Laser"), ("Doblez", "📐 Doblez"), ("Pintura", "🎨 Pintura"), ("Embarque", "📦 Embarque"), ("Calidad", "🔍 Calidad"), ("Dirección", "👑 Dirección"), ("Ingeniería", "⚙️ Ingeniería")]: matriz_final.loc[matriz_final['area'] == vv, 'area'] = vn
-
+                for vv, vn in [("Sin Asignar", "⚪ Sin Asignar"), ("Corte Laser", "✂️ Corte Laser"), ("Doblez", "📐 Doblez"), ("Pintura", "🎨 Pintura"), ("Embarque", "📦 Embarque"), ("Calidad", "🔍 Calidad"), ("Dirección", "👑 Dirección"), ("Ingeniería", "⚙️ Ingeniería")]: 
+                    matriz_final.loc[matriz_final['area'] == vv, 'area'] = vn
                 st.subheader("📊 Dashboard Global de Asistencias e Incidencias")
                 gt = global_a + global_r + global_f
                 ga_pct, gp_pct = (((gt - global_f) / gt * 100) if gt > 0 else 0), ((global_a / (global_a + global_f + global_r) * 100) if (global_a + global_f + global_r) > 0 else 0)
@@ -306,6 +254,7 @@ with tab_reporte:
                 with col_d2: st.plotly_chart(dibujar_reloj_donut(gp_pct, "Puntualidad Global", "#00a2e8"), use_container_width=False)
                 with col_d3: st.plotly_chart(dibujar_reloj_donut(max(0, 100 - ga_pct), "Tasa Ausentismo", "#ff0000"), use_container_width=False)
                 with col_d4: st.markdown("<br>", unsafe_allow_html=True); st.metric("Total Colaboradores", f"{len(matriz_final)} Activos"); st.metric("Inasistencias Quincena", f"{global_f} Faltas")
+
                 st.write("---"); st.subheader("🏭 Desglose Estructurado y Matrices por Área Operativa")
                 buffer_excel = io.BytesIO()
                 with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
@@ -323,7 +272,6 @@ with tab_reporte:
                     cols_mostrar = ['#Empleado', 'Nombre del Empleado'] + columnas_dias_str + ['PUNTUALIDAD', 'ASISTENCIA', 'DESEMPEÑO']
                     st.markdown("### 📋 Reporte General Consolidado"); st.dataframe(matriz_final[cols_mostrar].style.map(aplicar_colores_matriz, subset=columnas_dias_str), use_container_width=True)
                     lista_hojas_excel = [('CONSOLIDADO', matriz_final)] + [(ar.replace("👑 ", "").replace("⚙️ ", "").replace("🔍 ", "").replace("📐 ", "").replace("✂️ ", "").replace("🎨 ", "").replace("📦 ", "").replace("⚪ ", "")[:31], matriz_final[matriz_final['area'] == ar]) for ar in AREAS_LISTA_RAW]
-
                     for nombre_hoja, df_hoja in lista_hojas_excel:
                         if df_hoja.empty: continue
                         fila_inicio_datos = 4
@@ -356,8 +304,8 @@ with tab_reporte:
                         ws.write(fila_firmas, 1, "ASISTENCIA= A\nTIEMPO EXTRA= TE\nTRABAJO FORANEO= TF\nPERMISO= P\nFALTA= F\nVACACIONES= V\nINCAPACIDAD= I\nBONO PUNTUALIDAD= SÍ O NO\nBONO ASISTENCIA= SÍ O NO\nBONO DESEMPEÑO= 50, 75 ó 100%", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
                         ws.write(fila_firmas, 13, "NO LABORABLE CONVENIO= NLC\nDÍA FESTIVO LABORADO= DFL\nDIA DE DESCANSO LABORADO= DDL\nTIEMPO POR TIEMPO= TxT\nPERMISO SIN GOCE DE SUELDO= PSG\nSÁBADO= S\nDOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
                         fmt_linea_firma = workbook.add_format({'top': 1, 'top_color': '#000000', 'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
-                        ws.write_blank(fila_firmas + 4, 5, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 4, fila_firmas + 5, 7, "FIRMA DIRECTOR GENERAL", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
-                        ws.write_blank(fila_firmas + 4, 16, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 14, fila_firmas + 5, 18, "FIRMA GERENTE DE ÁREA", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+                        ws.write_blank(fila_firmas + 4, 5, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 4, fila_linea_firma + 5, 7, "FIRMA DIRECTOR GENERAL", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+                        ws.write_blank(fila_firmas + 4, 16, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 14, fila_linea_firma + 5, 18, "FIRMA GERENTE DE ÁREA", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
                         ws.write(fila_firmas + 8, 0, "FO-SGC-02          PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
 
                     for ar in AREAS_LISTA_RAW:
@@ -374,3 +322,4 @@ with tab_reporte:
                 st.download_button(label="📄 Descargar Reporte FO-RHU-23 Dividido por Áreas (.xlsx)", data=buffer_excel.getvalue(), file_name=f"FO-RHU-23_PRENOMINA_POR_AREAS_{fecha_fin.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         else: st.warning("⚠️ No se encontraron archivos de asistencia procesables en la ruta.")
     else: st.info("💡 Ingresa la ruta de la carpeta con los archivos en el panel izquierdo para comenzar el análisis.")
+
