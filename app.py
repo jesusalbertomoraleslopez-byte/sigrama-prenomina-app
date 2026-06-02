@@ -39,7 +39,7 @@ ruta_carpeta = "./asistencias"
 if not os.path.exists(ruta_carpeta):
     os.makedirs(ruta_carpeta)
 
-# --- NUEVO: CARGADOR DE ARCHIVOS DE CORREO DIRECTO A LA APP ---
+# --- CARGADOR DE ARCHIVOS DE CORREO DIRECTO A LA APP ---
 st.sidebar.subheader("📥 Cargar Asistencias del Correo")
 archivos_correo = st.sidebar.file_uploader(
     "Arrastra aquí tus archivos .xls descargados:", 
@@ -51,14 +51,13 @@ archivos_correo = st.sidebar.file_uploader(
 if archivos_correo:
     for archivo in archivos_correo:
         ruta_destino = os.path.join(ruta_carpeta, archivo.name)
-        # Guardar el archivo cargado en la carpeta local de asistencias
         with open(ruta_destino, "wb") as f:
             f.write(archivo.getbuffer())
     st.sidebar.success(f"¡{len(archivos_correo)} archivo(s) guardado(s) con éxito!")
 
 # Selectores de tolerancia y tiempos
 hora_limite_input = st.sidebar.time_input("Hora límite de Entrada:", value=datetime.strptime("08:01:00", "%H:%M:%S").time())
-# Cálculo dinámico de la quincena actual real del calendario (Año 2026)
+# Cálculo dinámico de la quincena actual real del calendario
 hoy_real = datetime.now().date()
 if hoy_real.day <= 15:
     defecto_inicio = hoy_real.replace(day=1)
@@ -102,15 +101,18 @@ def limpiar_registro_hora(valor_celda):
 
 def aplicar_colores_matriz(val):
     if val in ["A", "R"]:
-        return 'background-color: #d4edda; color: #155724; font-weight: bold; text-align: center;'  # Verde
+        return 'background-color: #d4edda; color: #155724; font-weight: bold; text-align: center;'
     elif val == "F":
-        return 'background-color: #f8d7da; color: #721c24; font-weight: bold; text-align: center;'  # Rojo
+        return 'background-color: #f8d7da; color: #721c24; font-weight: bold; text-align: center;'
     elif val in ["S", "D"]:
-        return 'background-color: #fff3cd; color: #856404; font-weight: bold; text-align: center;'  # Amarillo
+        return 'background-color: #fff3cd; color: #856404; font-weight: bold; text-align: center;'
     return 'text-align: center;'
 @st.cache_data
 def procesar_base_asistencias(carpeta):
+    # Compatibilidad universal de rutas para servidores Linux Cloud
     ruta_busqueda = os.path.join(carpeta, "*.xls")
+    ruta_busqueda = ruta_busqueda.replace("\\", "/")
+    
     archivos = glob.glob(ruta_busqueda)
     if not archivos: 
         return None
@@ -267,7 +269,6 @@ with tab_reporte:
                 df_raw_filtrado = df_raw[(df_raw['Fecha_date'] >= fecha_inicio_2024) & (df_raw['Fecha_date'] <= fecha_fin_2024)]
             
             columnas_dias_str = [str(d.day) for d in lista_dias]
-            
             if df_raw_filtrado.empty:
                 st.info("💡 **Aviso del Sistema:** No se encontraron asistencias en el rango. Ajusta las fechas.")
             else:
@@ -276,7 +277,6 @@ with tab_reporte:
                     if col_dia not in matriz.columns: matriz[col_dia] = None
                 matriz = matriz[[d.day for d in lista_dias]]
                 matriz_final = matriz.copy().reset_index()
-                
                 for d in lista_dias:
                     num_dia = d.day
                     if d.weekday() == 5: matriz_final[num_dia] = matriz_final[num_dia].fillna("S")
@@ -290,11 +290,8 @@ with tab_reporte:
                     dias_laborables = len([r for r in record_dias if r not in ["S", "D"]])
                     f, r, a = record_dias.count("F"), record_dias.count("R"), record_dias.count("A")
                     global_f += f; global_r += r; global_a += a
-                    
-                    pct_as = ((dias_laborables - f) / dias_laborables * 100) if dias_laborables > 0 else 0
-                    asistencias.append(f"{pct_as:.0f}%")
-                    pct_pu = ((a + r - r) / (a + r) * 100) if (a + r) > 0 else 0
-                    puntualidades.append(f"{pct_pu:.0f}%")
+                    asistencias.append(f"{((dias_laborables - f) / dias_laborables * 100) if dias_laborables > 0 else 0:.0f}%")
+                    puntualidades.append(f"{((a + r - r) / (a + r) * 100) if (a + r) > 0 else 0:.0f}%")
                     desempenos.append("40%" if f > 0 else ("70%" if r > 0 else "100%"))
 
                 matriz_final['PUNTUALIDAD'] = puntualidades
@@ -305,7 +302,6 @@ with tab_reporte:
                 df_db_mapping = pd.read_sql_query("SELECT id_empleado, area FROM empleados", conn)
                 df_db_mapping['id_empleado'] = df_db_mapping['id_empleado'].astype(str).str.strip()
                 matriz_final = matriz_final.merge(df_db_mapping, left_on='#Empleado', right_on='id_empleado', how='left')
-
                 matriz_final['area'] = matriz_final['area'].fillna("⚪ Sin Asignar").str.strip()
                 for v_viejo, v_nuevo in [("Sin Asignar", "⚪ Sin Asignar"), ("Corte Laser", "✂️ Corte Laser"), ("Doblez", "📐 Doblez"), ("Pintura", "🎨 Pintura"), ("Embarque", "📦 Embarque"), ("Calidad", "🔍 Calidad"), ("Dirección", "👑 Dirección"), ("Ingeniería", "⚙️ Ingeniería")]:
                     matriz_final.loc[matriz_final['area'] == v_viejo, 'area'] = v_nuevo
@@ -314,25 +310,19 @@ with tab_reporte:
                 g_total_laborable = global_a + global_r + global_f
                 g_asistencia_pct = ((g_total_laborable - global_f) / g_total_laborable * 100) if g_total_laborable > 0 else 0
                 g_puntualidad_pct = (global_a / (global_a + global_f + global_r) * 100) if (global_a + global_f + global_r) > 0 else 0
-                
                 col_d1, col_d2, col_d3, col_d4 = st.columns(4)
                 with col_d1: st.plotly_chart(dibujar_reloj_donut(g_asistencia_pct, "Asistencia Institucional", "#ffa500"), use_container_width=False)
                 with col_d2: st.plotly_chart(dibujar_reloj_donut(g_puntualidad_pct, "Puntualidad Global", "#00a2e8"), use_container_width=False)
                 with col_d3: st.plotly_chart(dibujar_reloj_donut(max(0, 100 - g_asistencia_pct), "Tasa Ausentismo", "#ff0000"), use_container_width=False)
-                with col_d4:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    st.metric("Total Colaboradores", f"{len(matriz_final)} Activos")
-                    st.metric("Inasistencias Quincena", f"{global_f} Faltas")
+                with col_d4: st.markdown("<br>", unsafe_allow_html=True); st.metric("Total Colaboradores", f"{len(matriz_final)} Activos"); st.metric("Inasistencias Quincena", f"{global_f} Faltas")
 
-                st.write("---")
-                st.subheader("🏭 Desglose Estructurado y Matrices por Área Operativa")
+                st.write("---"); st.subheader("🏭 Desglose Estructurado y Matrices por Área Operativa")
                 buffer_excel = io.BytesIO()
                 with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
                     workbook = writer.book
                     fmt_header = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 10, 'bg_color': '#FFFFFF', 'color': '#000000', 'border': 1, 'border_color': '#FF0000', 'align': 'center', 'valign': 'vcenter'})
                     fmt_data = workbook.add_format({'font_name': 'Arial', 'font_size': 10, 'border': 1, 'border_color': '#FF0000', 'align': 'left', 'valign': 'vcenter'})
                     fmt_data_center = workbook.add_format({'font_name': 'Arial', 'font_size': 10, 'border': 1, 'border_color': '#FF0000', 'align': 'center', 'valign': 'vcenter'})
-                    
                     fmt_celda_a = workbook.add_format({'bg_color': '#d4edda', 'color': '#155724', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
                     fmt_celda_f = workbook.add_format({'bg_color': '#f8d7da', 'color': '#721c24', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
                     fmt_celda_sd = workbook.add_format({'bg_color': '#fff3cd', 'color': '#856404', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
@@ -340,38 +330,26 @@ with tab_reporte:
                     fmt_meta_code = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 11, 'color': '#FF0000'})
                     fmt_meta_sub = workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'color': '#555555'})
                     fmt_fecha_titulo = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 11})
-
                     cols_mostrar = ['#Empleado', 'Nombre del Empleado'] + columnas_dias_str + ['PUNTUALIDAD', 'ASISTENCIA', 'DESEMPEÑO']
-                    st.markdown("### 📋 Reporte General Consolidado")
-                    st.dataframe(matriz_final[cols_mostrar].style.map(aplicar_colores_matriz, subset=columnas_dias_str), use_container_width=True)
-
+                    st.markdown("### 📋 Reporte General Consolidado"); st.dataframe(matriz_final[cols_mostrar].style.map(aplicar_colores_matriz, subset=columnas_dias_str), use_container_width=True)
                     lista_hojas_excel = [('CONSOLIDADO', matriz_final)] + [(ar.replace("👑 ", "").replace("⚙️ ", "").replace("🔍 ", "").replace("📐 ", "").replace("✂️ ", "").replace("🎨 ", "").replace("📦 ", "").replace("⚪ ", "")[:31], matriz_final[matriz_final['area'] == ar]) for ar in AREAS_LISTA_RAW]
-
                     for nombre_hoja, df_hoja in lista_hojas_excel:
                         if df_hoja.empty: continue
                         fila_inicio_datos = 4
                         df_hoja[cols_mostrar].to_excel(writer, sheet_name=nombre_hoja, index=False, startrow=3)
-                        ws = writer.sheets[nombre_hoja]
-                        ws.set_row(0, 18); ws.set_row(1, 15); ws.set_row(2, 15); ws.set_row(3, 22)
-                        ws.write('A1', 'FO-RHU-23', fmt_meta_code)
-                        ws.write('A2', 'Revisión 01', fmt_meta_sub)
-                        ws.write('A3', '25 de mayo 2020', fmt_meta_sub)
-                        ws.merge_range('D1:N2', 'PRE-NÓMINA', fmt_meta_title)
-                        ws.write('A4', f'PRENÓMINA AL {fecha_fin.strftime("%d DE %B DE %Y").upper()}', fmt_fecha_titulo)
-                        
+                        ws = writer.sheets[nombre_hoja]; ws.set_row(0, 18); ws.set_row(1, 15); ws.set_row(2, 15); ws.set_row(3, 22)
+                        ws.write('A1', 'FO-RHU-23', fmt_meta_code); ws.write('A2', 'Revisión 01', fmt_meta_sub); ws.write('A3', '25 de mayo 2020', fmt_meta_sub)
+                        ws.merge_range('D1:N2', 'PRE-NÓMINA', fmt_meta_title); ws.write('A4', f'PRENÓMINA AL {fecha_fin.strftime("%d DE %B DE %Y").upper()}', fmt_fecha_titulo)
                         encabezados_oficiales = ["#Empleado", "Nombre del Empleado"] + columnas_dias_str + ["TE", "PUNTUALIDAD", "ASISTENCIA", "DESEMPEÑO"]
-                        for col_num, header_text in enumerate(encabezados_oficiales):
-                            ws.write(fila_inicio_datos, col_num, header_text, fmt_header)
+                        for col_num, header_text in enumerate(encabezados_oficiales): ws.write(fila_inicio_datos, col_num, header_text, fmt_header)
                         ws.set_column('A:A', 12); ws.set_column('B:B', 35); ws.set_column('C:R', 4); ws.set_column('S:V', 14)
-                        
                         for idx_fila in range(len(df_hoja)):
                             fila_excel = fila_inicio_datos + 1 + idx_fila
                             ws.set_row(fila_excel, 20)
                             ws.write(fila_excel, 0, df_hoja.iloc[idx_fila]['#Empleado'], fmt_data_center)
                             ws.write(fila_excel, 1, df_hoja.iloc[idx_fila]['Nombre del Empleado'], fmt_data)
                             for idx_dia, dia_str in enumerate(columnas_dias_str):
-                                col_excel = 2 + idx_dia
-                                valor_dia = df_hoja.iloc[idx_fila][dia_str]
+                                col_excel = 2 + idx_dia; valor_dia = df_hoja.iloc[idx_fila][dia_str]
                                 if valor_dia in ["A", "R"]: ws.write(fila_excel, col_excel, valor_dia, fmt_celda_a)
                                 elif valor_dia == "F": ws.write(fila_excel, col_excel, valor_dia, fmt_celda_f)
                                 elif valor_dia in ["S", "D"]: ws.write(fila_excel, col_excel, valor_dia, fmt_celda_sd)
@@ -387,10 +365,8 @@ with tab_reporte:
                         ws.write(fila_firmas, 1, "ASISTENCIA= A\nTIEMPO EXTRA= TE\nTRABAJO FORANEO= TF\nPERMISO= P\nFALTA= F\nVACACIONES= V\nINCAPACIDAD= I\nBONO PUNTUALIDAD= SÍ O NO\nBONO ASISTENCIA= SÍ O NO\nBONO DESEMPEÑO= 50, 75 ó 100%", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
                         ws.write(fila_firmas, 13, "NO LABORABLE CONVENIO= NLC\nDÍA FESTIVO LABORADO= DFL\nDIA DE DESCANSO LABORADO= DDL\nTIEMPO POR TIEMPO= TxT\nPERMISO SIN GOCE DE SUELDO= PSG\nSÁBADO= S\nDOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
                         fmt_linea_firma = workbook.add_format({'top': 1, 'top_color': '#000000', 'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
-                        ws.write_blank(fila_firmas + 4, 5, fmt_linea_firma)
-                        ws.merge_range(fila_firmas + 5, 4, fila_firmas + 5, 7, "FIRMA DIRECTOR GENERAL", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
-                        ws.write_blank(fila_firmas + 4, 16, fmt_linea_firma)
-                        ws.merge_range(fila_firmas + 5, 14, fila_firmas + 5, 18, "FIRMA GERENTE DE ÁREA", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+                        ws.write_blank(fila_firmas + 4, 5, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 4, fila_firmas + 5, 7, "FIRMA DIRECTOR GENERAL", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+                        ws.write_blank(fila_firmas + 4, 16, fmt_linea_firma); ws.merge_range(fila_firmas + 5, 14, fila_firmas + 5, 18, "FIRMA GERENTE DE ÁREA", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
                         ws.write(fila_firmas + 8, 0, "FO-SGC-02          PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
 
                     for ar in AREAS_LISTA_RAW:
@@ -399,18 +375,11 @@ with tab_reporte:
                             conteo_flat_area = df_area_actual[columnas_dias_str].values.flatten()
                             c_a = list(conteo_flat_area).count("A"); c_r = list(conteo_flat_area).count("R"); c_f = list(conteo_flat_area).count("F")
                             area_total_dias = c_a + c_r + c_f
-                            area_asistencia = ((area_total_dias - c_f) / area_total_dias * 100) if area_total_dias > 0 else 0
-                            area_puntualidad = (c_a / (c_a + c_r) * 100) if (c_a + c_r) > 0 else 0
                             st.markdown(f"#### {ar}")
-                            st.markdown(f"**Factor Asistencia de la Celda:** `{area_asistencia:.1f}%`  |  **Puntualidad:** `{area_puntualidad:.1f}%`")
+                            st.markdown(f"**Factor Asistencia de la Celda:** `{((area_total_dias - c_f) / area_total_dias * 100) if area_total_dias > 0 else 0:.1f}%`  |  **Puntualidad:** `{((c_a / (c_a + c_r) * 100) if (c_a + c_r) > 0 else 0):.1f}%`")
                             st.dataframe(df_area_actual[cols_mostrar].style.map(aplicar_colores_matriz, subset=columnas_dias_str), use_container_width=True)
 
-                st.markdown("---")
-                st.subheader("📥 Guardar Libro de Pre-Nómina por Áreas")
-                st.download_button(
-                    label="📄 Descargar Reporte FO-RHU-23 Dividido por Áreas (.xlsx)", data=buffer_excel.getvalue(),
-                    file_name=f"FO-RHU-23_PRENOMINA_POR_AREAS_{fecha_fin.strftime('%Y%m%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
+                st.markdown("---"); st.subheader("📥 Guardar Libro de Pre-Nómina por Áreas")
+                st.download_button(label="📄 Descargar Reporte FO-RHU-23 Dividido por Áreas (.xlsx)", data=buffer_excel.getvalue(), file_name=f"FO-RHU-23_PRENOMINA_POR_AREAS_{fecha_fin.strftime('%Y%m%d')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         else: st.warning("⚠️ No se encontraron archivos de asistencia procesables en la ruta.")
     else: st.info("💡 Ingresa la ruta de la carpeta con los archivos en el panel izquierdo para comenzar el análisis.")
