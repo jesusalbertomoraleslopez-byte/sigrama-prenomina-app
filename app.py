@@ -442,28 +442,41 @@ with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
             ws.write(fila_excel, 4 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['ASISTENCIA'], fmt_data_center)
             ws.write(fila_excel, 5 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['DESEMPEÑO'], fmt_data_center)
 # ==============================================================================
-# SECCIÓN 8 (PARTE 3) - FIRMAS, GLOSARIO Y ENLACE DE DESCARGA (CORREGIDA)
+# SECCIÓN 8 (PARTE 3) - CORRECCIÓN DINÁMICA ABSOLUTA ANTI-OVERLAPPING
 # ==============================================================================
-            # Recuadro de Observaciones acortado hasta la columna 18 para evitar OverlappingRange
+            # Calculamos de forma dinámica el límite seguro de columnas para no tocar las métricas finales
+            total_columnas_datos = len(cols_mostrar)
+            columna_limite_seguro = max(2, total_columnas_datos - 4) 
+            
+            # Recuadro de Observaciones dinámico (Nunca choca con las métricas finales)
             fila_obs = fila_inicio_datos + len(df_hoja) + 2
-            ws.merge_range(fila_obs, 0, fila_obs + 2, 18, "", workbook.add_format({'border': 1, 'border_color': '#FF0000', 'valign': 'top'}))
+            ws.merge_range(fila_obs, 0, fila_obs + 2, columna_limite_seguro, "", workbook.add_format({'border': 1, 'border_color': '#FF0000', 'valign': 'top'}))
             ws.write(fila_obs, 0, " OBSERVACIONES: ", workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 9, 'color': '#FF0000'}))
             
-            # Glosario de Incidencias en la parte inferior de la hoja
+            # Glosario de Incidencias escalado asimétricamente según el ancho disponible
             fila_firmas = fila_obs + 5
             ws.write(fila_firmas, 1, "ASISTENCIA= A\nTIEMPO EXTRA= TE\nTRABAJO FORANEO= TF\nPERMISO= P\nFALTA= F\nVACACIONES= V\nINCAPACIDAD= I\nBONO PUNTUALIDAD= SÍ O NO\nBONO ASISTENCIA= SÍ O NO\nBONO DESEMPEÑO= 50, 75 ó 100%", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
-            ws.write(fila_firmas, 11, "NO LABORABLE CONVENIO= NLC\nDÍA FESTIVO LABORADO= DFL\nDIA DE DESCANSO LABORADO= DDL\nTIEMPO POR TIEMPO= TxT\nPERMISO SIN GOCE DE SUELDO= PSG\nSÁBADO= S\nDOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
             
-            # Espacios y Leyendas Estructurales de Firmas Autorizadas
+            col_glosario_der = max(6, columna_limite_seguro - 4)
+            ws.write(fila_firmas, col_glosario_der, "NO LABORABLE CONVENIO= NLC\nDÍA FESTIVO LABORADO= DFL\nDIA DE DESCANSO LABORADO= DDL\nTIEMPO POR TIEMPO= TxT\nPERMISO SIN GOCE DE SUELDO= PSG\nSÁBADO= S\nDOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
+            
+            # Espacios y Leyendas Estructurales de Firmas Autorizadas de manera segura
             fmt_linea_firma = workbook.add_format({'top': 1, 'top_color': '#000000', 'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
+            fmt_texto_firma = workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
             
-            # Línea de firma Director (Celdas D a G unificadas)
-            ws.merge_range(fila_firmas + 4, 3, fila_firmas + 4, 6, "", fmt_linea_firma)
-            ws.merge_range(fila_firmas + 5, 3, fila_firmas + 5, 6, "FIRMA DIRECTOR GENERAL", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+            # Posicionamiento matemático de las firmas en base al tamaño del reporte
+            col_firma1_ini = 2
+            col_firma1_fin = max(3, int(columna_limite_seguro / 2))
+            col_firma2_ini = col_firma1_fin + 2
+            col_firma2_fin = columna_limite_seguro
             
-            # Línea de firma Gerente (Celdas M a P unificadas)
-            ws.merge_range(fila_firmas + 4, 12, fila_firmas + 4, 15, "", fmt_linea_firma)
-            ws.merge_range(fila_firmas + 5, 14, fila_firmas + 5, 17, "FIRMA GERENTE DE ÁREA", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+            # Línea y Texto de Firma Director General
+            ws.merge_range(fila_firmas + 4, col_firma1_ini, fila_firmas + 4, col_firma1_fin, "", fmt_linea_firma)
+            ws.merge_range(fila_firmas + 5, col_firma1_ini, fila_firmas + 5, col_firma1_fin, "FIRMA DIRECTOR GENERAL", fmt_texto_firma)
+            
+            # Línea y Texto de Firma Gerente de Área
+            ws.merge_range(fila_firmas + 4, col_firma2_ini, fila_firmas + 4, col_firma2_fin, "", fmt_linea_firma)
+            ws.merge_range(fila_firmas + 5, col_firma2_ini, fila_firmas + 5, col_firma2_fin, "FIRMA GERENTE DE ÁREA", fmt_texto_firma)
             
             # Pie de Página de Protección Intelectual de Industria Sigrama
             ws.write(fila_firmas + 8, 0, "FO-SGC-02 PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
