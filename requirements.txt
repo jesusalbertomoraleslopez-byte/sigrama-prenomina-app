@@ -1,6 +1,7 @@
 streamlit
 pandas
-xlrd
-xlsxwriter
-openpyxl
 plotly
+requests
+xlrd
+openpyxl
+xlsxwriter
