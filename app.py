@@ -259,7 +259,7 @@ with tab_areas:
                 # 2. Subir de forma automática el archivo actualizado a tu Repositorio de GitHub
                 if GITHUB_TOKEN:
                     # Dirección de la API oficial formateada con barras diagonales estrictas
-                    url_api_personal = f"https://github.com{ARCHIVO_PERSONAL}"
+                    url_api_personal = f"https://api.github.com/repos/jesusalbertomoraleslopez-byte/sigrama-prenomina-app/contents/{ARCHIVO_PERSONAL}"
                     
                     headers_github = {
                         "Authorization": f"token {GITHUB_TOKEN}",
