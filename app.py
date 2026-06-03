@@ -253,11 +253,12 @@ with tab_areas:
         else:
             try:
                 df_editor.to_excel(ARCHIVO_PERSONAL, index=False)
-                if GITHUB_TOKEN:
-                    url_api_personal = f"https://github.com"
-                    headers_github = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json", "User-Agent": "Streamlit-App"}
-                    sha_personal = None
-                    res_get = requests.get(url_api_personal, headers=headers_github, timeout=10)
+            if GITHUB_TOKEN:
+                url_api_personal = f"https://github.com{ARCHIVO_PERSONAL}"
+                headers_github = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json", "User-Agent": "Streamlit-App"}
+                sha_personal = None
+                res_get = requests.get(url_api_personal, headers=headers_github, timeout=10)
+
                     if res_get.status_code == 200:
                         sha_personal = res_get.json().get("sha")
                     
