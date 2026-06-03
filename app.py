@@ -8,15 +8,37 @@ import os
 import io
 import requests
 import base64
+import streamlit as st
+import os
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
 # Configuración estética de la interfaz del navegador
 st.set_page_config(
-    page_title="Portal RH - Industria Sigrama", 
-    layout="wide", 
-    page_icon="👥"
+    page_title="Industria Sigrama - Control de Pre-Nómina",
+    page_icon="🎨",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
+
+# ==============================================================================
+# ENCABEZADO INSTITUCIONAL - BANNER DE RECURSOS HUMANOS
+# ==============================================================================
+NOMBRE_BANNER = "RH BANNER APP.png"
+
+# Verificamos si el archivo del banner existe en la raíz del repositorio de GitHub
+if os.path.exists(NOMBRE_BANNER):
+    st.image(
+        NOMBRE_BANNER, 
+        use_container_width=True, 
+        caption="Industria Sigrama S.A. de C.V. | Dirección Humana, Resultados e Innovación"
+    )
+else:
+    # Si el banner aún no se sube, muestra un título de respaldo limpio para que la app no falle
+    st.title("🏭 Industria Sigrama S.A. de C.V.")
+    st.subheader("Panel Operativo de Control de Pre-Nómina e Incidencias")
+
+st.markdown("---") # Línea divisoria estética antes de iniciar los paneles y pestañas
 
 # Constantes del Sistema
 ARCHIVO_PERSONAL = "personal.xlsx"
