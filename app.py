@@ -266,6 +266,7 @@ with tab_areas:
                         "Accept": "application/vnd.github.v3+json",
                         "User-Agent": "Streamlit-App"
                     }
+
                     
                     # Obtener el SHA del archivo actual en GitHub para poder reemplazarlo
                     sha_personal = None
