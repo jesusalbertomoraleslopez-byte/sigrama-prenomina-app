@@ -1,14 +1,13 @@
-
 # ==============================================================================
-# SECCIÓN 1: IMPORTACIONES Y CONFIGURACIÓN ESTÉTICA
+# SECCIÓN 1 - CONFIGURACIÓN DE PLATAFORMA E IMPORTACIONES
 # ==============================================================================
 import streamlit as st
 import pandas as pd
 import glob
 import os
 import io
-import base64
 import requests
+import base64
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 
@@ -19,88 +18,26 @@ st.set_page_config(
     page_icon="👥"
 )
 
-# Definición de constantes del repositorio y archivo de persistencia
+# Constantes del Sistema
 ARCHIVO_PERSONAL = "personal.xlsx"
-REPO_NAME = "jesusalbertomoraleslopez-byte/sigrama-prenomina-app"
 ruta_carpeta = "./asistencias"
 
-# Crear directorio temporal para asistencias si no existe localmente
 if not os.path.exists(ruta_carpeta):
     os.makedirs(ruta_carpeta)
 
-# Reconocimiento del Token de GitHub desde los Secrets del Servidor
+# --- RECONOCIMIENTO DEL TOKEN DESDE SECRETS ---
 try:
     GITHUB_TOKEN = st.secrets["github"]["token"]
 except:
     GITHUB_TOKEN = None
-# ==============================================================================
-# SECCIÓN 2: FUNCIONES MAESTRAS DE PROCESAMIENTO Y ARCHIVOS
-# ==============================================================================
-def cargar_catalogo_personal():
-    """Genera en automático el archivo si no existe, o lo lee de forma segura"""
-    if not os.path.exists(ARCHIVO_PERSONAL):
-        df_base = pd.DataFrame(columns=["id_empleado", "nombre", "area"])
-        df_base.to_excel(ARCHIVO_PERSONAL, index=False)
-        return df_base
-    try:
-        df = pd.read_excel(ARCHIVO_PERSONAL, dtype=str)
-        df['id_empleado'] = df['id_empleado'].str.strip()
-        df['nombre'] = df['nombre'].str.strip()
-        df['area'] = df['area'].str.strip()
-        return df[df['id_empleado'].notna() & (df['id_empleado'] != 'nan')]
-    except:
-        return pd.DataFrame(columns=["id_empleado", "nombre", "area"])
 
-def limpiar_registro_hora(valor_celda):
-    """Normaliza formatos de hora AM/PM y formatos de 24 horas"""
-    if pd.isna(valor_celda) or str(valor_celda).strip() == "":
-        return None
-    texto_hora = str(valor_celda).strip()
-    if "1900" in texto_hora:
-        componentes = texto_hora.split(" ")
-        if len(componentes) >= 3:
-            texto_hora = componentes[1] + " " + " ".join(componentes[2:])
-    texto_hora = texto_hora.replace("a. m.", "AM").replace("p. m.", "PM").replace("a.m.", "AM").replace("p.m.", "PM")
-    try:
-        return pd.to_datetime(texto_hora, format="%I:%M:%S %p").time()
-    except:
-        try:
-            return pd.to_datetime(texto_hora, format="%H:%M:%S").time()
-        except:
-            return valor_celda.time() if hasattr(valor_celda, 'time') else None
+REPO_NAME = "jesusalbertomoraleslopez-byte/sigrama-prenomina-app"
 # ==============================================================================
-# SECCIÓN 3: COMPONENTES GRÁFICOS Y ESTILOS
-# ==============================================================================
-def aplicar_colores_matriz(val):
-    """Asigna estilos CSS a la tabla interactiva de pre-nómina"""
-    if val in ["A", "R"]:
-        return 'background-color: #d4edda; color: #155724; font-weight: bold; text-align: center;'
-    elif val == "F":
-        return 'background-color: #f8d7da; color: #721c24; font-weight: bold; text-align: center;'
-    elif val in ["S", "D"]:
-        return 'background-color: #fff3cd; color: #856404; font-weight: bold; text-align: center;'
-    return 'text-align: center;'
-
-def dibujar_reloj_donut(porcentaje, titulo, color_linea):
-    """Renderiza los medidores circulares del dashboard general"""
-    fig = go.Figure(data=[go.Pie(
-        labels=['Cumplimiento', 'Restante'],
-        values=[porcentaje, max(0, 100 - porcentaje)],
-        hole=.75, marker=dict(colors=[color_linea, '#f2f2f2']),
-        textinfo='none', hoverinfo='none'
-    )])
-    fig.update_layout(
-        title=dict(text=f"<b>{titulo}</b>", x=0.5, y=0.05, xanchor='center', font=dict(size=14)),
-        showlegend=False, margin=dict(t=10, b=40, l=10, r=10), height=180, width=180,
-        annotations=[dict(text=f"<b>{int(porcentaje)}%</b>", x=0.5, y=0.5, font=dict(size=20), showarrow=False)]
-    )
-    return fig
-# ==============================================================================
-# SECCIÓN 4: BARRA LATERAL, ARCHIVOS CORREO Y CALENDARIO DEDICADO
+# SECCIÓN 2 - PANEL LATERAL Y CARGADOR DE ARCHIVOS
 # ==============================================================================
 st.sidebar.header("⚙️ Configuración del Periodo")
 
-# Cargador de archivos en espera (Barra Lateral)
+# Cargador de archivos en espera
 st.sidebar.subheader("📥 Cargar Nuevas Asistencias")
 archivos_correo = st.sidebar.file_uploader(
     "Arrastra aquí tus archivos .xls del correo:", 
@@ -110,47 +47,57 @@ archivos_correo = st.sidebar.file_uploader(
 
 if archivos_correo:
     st.sidebar.info(f"📋 {len(archivos_correo)} archivo(s) listos.")
-
-# Botón para inyectar archivos directamente al repositorio de asistencias
-if st.sidebar.button("🚀 Subir y Guardar directamente en GitHub", use_container_width=True):
-    if not GITHUB_TOKEN:
-        st.sidebar.error("⚠️ Error: No se encontró el Token en los Secrets.")
-    else:
-        exitos = 0
-        for archivo in archivos_correo:
-            ruta_local = os.path.join(ruta_carpeta, archivo.name).replace("\\", "/")
-            contenido_bytes = archivo.getbuffer()
-            with open(ruta_local, "wb") as f:
-                f.write(contenido_bytes)
+# ==============================================================================
+# SECCIÓN 3 - ENLACE DE ARCHIVOS ENTRANTES CON GITHUB
+# ==============================================================================
+if archivos_correo:
+    if st.sidebar.button("🚀 Subir y Guardar directamente en GitHub", use_container_width=True):
+        if not GITHUB_TOKEN:
+            st.sidebar.error("⚠️ Error: No se encontró el Token en los Secrets.")
+        else:
+            exitos = 0
+            for archivo in archivos_correo:
+                ruta_local = os.path.join(ruta_carpeta, archivo.name).replace("\\", "/")
+                contenido_bytes = archivo.getbuffer()
+                with open(ruta_local, "wb") as f:
+                    f.write(contenido_bytes)
+                
+                url_api = f"https://github.com{REPO_NAME}/contents/asistencias/{archivo.name}"
+                headers = {
+                    "Authorization": f"token {GITHUB_TOKEN}",
+                    "Accept": "application/vnd.github.v3+json",
+                    "User-Agent": "Streamlit-App"
+                }
+                
+                sha = None
+                try:
+                    res_get = requests.get(url_api, headers=headers, timeout=10)
+                    if res_get.status_code == 200:
+                        sha = res_get.json().get("sha")
+                except:
+                    pass
+                
+                contenido_base64 = base64.b64encode(contenido_bytes).decode("utf-8")
+                payload = {
+                    "message": f"Carga de asistencia diaria: {archivo.name}",
+                    "content": contenido_base64
+                }
+                if sha:
+                    payload["sha"] = sha
+                
+                try:
+                    res_put = requests.put(url_api, json=payload, headers=headers, timeout=15)
+                    if res_put.status_code in [200, 201]:
+                        exitos += 1
+                except:
+                    pass
             
-            url_api = f"https://github.com{REPO_NAME}/contents/asistencias/{archivo.name}"
-            headers = {
-                "Authorization": f"token {GITHUB_TOKEN}",
-                "Accept": "application/vnd.github.v3+json",
-                "User-Agent": "Streamlit-App"
-            }
-            sha = None
-            try:
-                res_get = requests.get(url_api, headers=headers, timeout=10)
-                if res_get.status_code == 200:
-                    sha = res_get.json().get("sha")
-            except:
-                pass
-            
-            contenido_base64 = base64.b64encode(contenido_bytes).decode("utf-8")
-            payload = {"message": f"Carga de asistencia diaria: {archivo.name}", "content": contenido_base64}
-            if sha:
-                payload["sha"] = sha
-            try:
-                res_put = requests.put(url_api, json=payload, headers=headers, timeout=15)
-                if res_put.status_code in [200, 201]:
-                    exitos += 1
-            except:
-                pass
-        if exitos > 0:
-            st.sidebar.success(f"¡{exitos} archivo(s) guardado(s) en GitHub!")
-            st.rerun()
-
+            if exitos > 0:
+                st.sidebar.success(f"¡{exitos} archivo(s) guardado(s) en GitHub!")
+                st.rerun()
+# ==============================================================================
+# SECCIÓN 4 - GESTIÓN DE TIEMPO Y MANEJO DE PERSONAL PERSISTENTE
+# ==============================================================================
 hora_limite_input = st.sidebar.time_input(
     "Hora límite de Entrada:", 
     value=datetime.strptime("08:01:00", "%H:%M:%S").time()
@@ -169,8 +116,23 @@ else:
 st.sidebar.subheader("📅 Fechas de la Quincena")
 fecha_inicio = st.sidebar.date_input("Fecha Inicio:", value=defecto_inicio)
 fecha_fin = st.sidebar.date_input("Fecha Fin:", value=defecto_fin)
+
+# --- FUNCIÓN DE AUTOGENERACIÓN Y CARGA DE EXCEL DE PERSONAL ---
+def cargar_catalogo_personal():
+    if not os.path.exists(ARCHIVO_PERSONAL):
+        df_base = pd.DataFrame(columns=["id_empleado", "nombre", "area"])
+        df_base.to_excel(ARCHIVO_PERSONAL, index=False)
+        return df_base
+    try:
+        df = pd.read_excel(ARCHIVO_PERSONAL, dtype=str)
+        df['id_empleado'] = df['id_empleado'].str.strip()
+        df['nombre'] = df['nombre'].str.strip()
+        df['area'] = df['area'].str.strip()
+        return df[df['id_empleado'].notna() & (df['id_empleado'] != 'nan')]
+    except:
+        return pd.DataFrame(columns=["id_empleado", "nombre", "area"])
 # ==============================================================================
-# SECCIÓN 5: ESTRUCTURACIÓN DE LOGOTIPOS Y PESTAÑA CATÁLOGO MAESTRO (CON CLAVE)
+# SECCIÓN 5 - INTERFAZ CORPORATIVA Y PARSER DE HORAS
 # ==============================================================================
 logo_path = "LOGOTIPO COLOR (1).jfif"
 if os.path.exists(logo_path):
@@ -183,6 +145,48 @@ else:
 st.markdown("<h3 style='text-align: center;'>👥 Portal de Capital Humano: Formato FO-RHU-23</h3>", unsafe_allow_html=True)
 st.markdown("---")
 
+def limpiar_registro_hora(valor_celda):
+    if pd.isna(valor_celda) or str(valor_celda).strip() == "":
+        return None
+    texto_hora = str(valor_celda).strip()
+    if "1900" in texto_hora:
+        componentes = texto_hora.split(" ")
+        if len(componentes) >= 3:
+            texto_hora = componentes[1] + " " + " ".join(componentes[2:])
+    texto_hora = texto_hora.replace("a. m.", "AM").replace("p. m.", "PM").replace("a.m.", "AM").replace("p.m.", "PM")
+    try:
+        return pd.to_datetime(texto_hora, format="%I:%M:%S %p").time()
+    except:
+        try:
+            return pd.to_datetime(texto_hora, format="%H:%M:%S").time()
+        except:
+            return valor_celda.time() if hasattr(valor_celda, 'time') else None
+
+def aplicar_colores_matriz(val):
+    if val in ["A", "R"]:
+        return 'background-color: #d4edda; color: #155724; font-weight: bold; text-align: center;'
+    elif val == "F":
+        return 'background-color: #f8d7da; color: #721c24; font-weight: bold; text-align: center;'
+    elif val in ["S", "D"]:
+        return 'background-color: #fff3cd; color: #856404; font-weight: bold; text-align: center;'
+    return 'text-align: center;'
+
+def dibujar_reloj_donut(porcentaje, titulo, color_linea):
+    fig = go.Figure(data=[go.Pie(
+        labels=['Cumplimiento', 'Restante'],
+        values=[porcentaje, max(0, 100 - porcentaje)],
+        hole=.75, marker=dict(colors=[color_linea, '#f2f2f2']),
+        textinfo='none', hoverinfo='none'
+    )])
+    fig.update_layout(
+        title=dict(text=f"<b>{titulo}</b>", x=0.5, y=0.05, xanchor='center', font=dict(size=14)),
+        showlegend=False, margin=dict(t=10, b=40, l=10, r=10), height=180, width=180,
+        annotations=[dict(text=f"<b>{int(porcentaje)}%</b>", x=0.5, y=0.5, font=dict(size=20), showarrow=False)]
+    )
+    return fig
+# ==============================================================================
+# SECCIÓN 6 - LECTURA EXTRACTORA XLS Y PANEL DE CONTROL DE PERSONAL
+# ==============================================================================
 @st.cache_data
 def procesar_base_asistencias(carpeta):
     ruta_busqueda = os.path.join(carpeta, "*.xls").replace("\\", "/")
@@ -214,14 +218,13 @@ def procesar_base_asistencias(carpeta):
         return df_master
     return None
 
-tab_reporte, tab_areas = st.tabs(["📊 Pre-Nómina y Reportes", "📁 Asignación de Áreas y Personal"])
+tab_reporte, tab_areas = st.tabs(["📊 Pre-Nómina y Reportes", "📂 Asignación de Áreas y Personal"])
 AREAS_LISTA_RAW = ["⚪ Sin Asignar", "👑 Dirección", "⚙️ Ingeniería", "🔍 Calidad", "📐 Doblez", "✂️ Corte Laser", "🎨 Pintura", "📦 Embarque"]
 
 with tab_areas:
     st.subheader("📝 Panel de Control de Plantilla y Estructura Organizacional")
-    
-    # Lectura del catálogo de personal (Generación automática integrada)
     df_db = cargar_catalogo_personal()
+    
     df_asistencias_raw = procesar_base_asistencias(ruta_carpeta)
     cambio_detectado = False
     
@@ -237,17 +240,8 @@ with tab_areas:
         if cambio_detectado:
             df_db = pd.concat([df_db, pd.DataFrame(nuevos_registros)], ignore_index=True)
             df_db.to_excel(ARCHIVO_PERSONAL, index=False)
-
-    st.markdown("#### Catálogo Maestro de Personal")
-    df_editor = st.data_editor(
-        df_db, 
-        column_config={
-            "id_empleado": st.column_config.TextColumn("ID Empleado", required=True), 
-            "nombre": st.column_config.TextColumn("Nombre Completo del Colaborador", required=True), 
-            "area": st.column_config.SelectboxColumn("Área Operativa Asignada", options=AREAS_LISTA_RAW, required=True)
-        }, 
-        num_rows="dynamic", use_container_width=True, key="maestro_personal_editor"
-    )
+            
+    df_editor = st.data_editor(df_db, column_config={"id_empleado": st.column_config.TextColumn("ID Empleado", required=True), "nombre": st.column_config.TextColumn("Nombre Completo del Colaborador", required=True), "area": st.column_config.SelectboxColumn("Área Operativa Asignada", options=AREAS_LISTA_RAW, required=True)}, num_rows="dynamic", use_container_width=True, key="maestro_personal_editor")
     
     st.markdown("---")
     st.markdown("#### 🔒 Autorización de Cambios")
@@ -255,7 +249,7 @@ with tab_areas:
     
     if st.button("💾 Guardar Cambios ESTRUCTURALES de la Tabla y Sincronizar con GitHub"):
         if clave_usuario != "RHSigrama":
-            st.error("❌ Clave de Usuario incorrecta. No tienes autorización para modificar el catálogo.")
+            st.error("❌ Clave de Usuario incorrecta. No tienes autorización.")
         else:
             try:
                 df_editor.to_excel(ARCHIVO_PERSONAL, index=False)
@@ -269,25 +263,23 @@ with tab_areas:
                     
                     with open(ARCHIVO_PERSONAL, "rb") as f:
                         contenido_bytes_personal = f.read()
-                    contenido_b64_personal = base64.b64encode(contenido_bytes_personal).decode("utf-8")
-                    
-                    payload_personal = {"message": "Sincronización automatizada de personal.xlsx", "content": contenido_b64_personal}
+                    payload_personal = {"message": "Sincronización de personal.xlsx", "content": base64.b64encode(contenido_bytes_personal).decode("utf-8")}
                     if sha_personal:
                         payload_personal["sha"] = sha_personal
                     
                     res_put = requests.put(url_api_personal, json=payload_personal, headers=headers_github, timeout=15)
                     if res_put.status_code in [200, 201]:
-                        st.success("¡Catálogo sincronizado con éxito en tu repositorio de GitHub!")
+                        st.success("¡Catálogo sincronizado en GitHub con éxito!")
                         st.rerun()
                     else:
-                        st.error(f"Error en API GitHub: {res_put.status_code}")
+                        st.error(f"Error API GitHub: {res_put.status_code}")
                 else:
-                    st.warning("⚠️ Guardado localmente. Configure GITHUB_TOKEN en Secrets para subirlo.")
+                    st.warning("⚠️ Guardado local. Falta GITHUB_TOKEN.")
                     st.rerun()
             except Exception as e:
-                st.error(f"Error de procesamiento: {e}")
+                st.error(f"Error: {e}")
 # ==============================================================================
-# SECCIÓN 6: PESTAÑA REPORTES - CRUCE E INYECTADO DEL ARCHIVO EXCEL PERSONAL
+# SECCIÓN 7 - PIVOTACIÓN DE INCIDENCIAS Y MATRIZ DE CRUCE DE ÁREAS
 # ==============================================================================
 with tab_reporte:
     if os.path.exists(ruta_carpeta):
@@ -299,17 +291,14 @@ with tab_reporte:
             while curr <= fecha_fin:
                 lista_dias.append(curr)
                 curr += timedelta(days=1)
-            
+                
             codigos = []
             for _, fila in df_raw.iterrows():
                 nave = str(fila.get('Nave Entrada', '')).strip().upper()
-                if "FALTA" in nave or pd.isna(fila['util_hora']): 
-                    codigos.append("F")
-                elif fila['util_hora'] > hora_limite_input: 
-                    codigos.append("R")
-                else: 
-                    codigos.append("A")
-            
+                if "FALTA" in nave or pd.isna(fila['util_hora']): codigos.append("F")
+                elif fila['util_hora'] > hora_limite_input: codigos.append("R")
+                else: codigos.append("A")
+                
             df_raw['Cod_Incidencia'] = codigos
             df_raw['Dia_Num'] = pd.to_datetime(df_raw['Fecha_Clean']).dt.day
             df_raw['Fecha_date'] = pd.to_datetime(df_raw['Fecha_Clean'], errors='coerce').dt.date
@@ -321,20 +310,16 @@ with tab_reporte:
             else:
                 matriz = df_raw_filtrado.pivot_table(index=['#Empleado', 'Nombre del Empleado'], columns='Dia_Num', values='Cod_Incidencia', aggfunc='first')
                 for col_dia in [d.day for d in lista_dias]:
-                    if col_dia not in matriz.columns: 
-                        matriz[col_dia] = None
+                    if col_dia not in matriz.columns: matriz[col_dia] = None
                 matriz = matriz[[d.day for d in lista_dias]]
                 matriz_final = matriz.copy().reset_index()
                 
                 for d in lista_dias:
                     num_dia = d.day
-                    if d.weekday() == 5: 
-                        matriz_final[num_dia] = matriz_final[num_dia].fillna("S")
-                    elif d.weekday() == 6: 
-                        matriz_final[num_dia] = matriz_final[num_dia].fillna("D")
-                    else: 
-                        matriz_final[num_dia] = matriz_final[num_dia].fillna("F")
-                
+                    if d.weekday() == 5: matriz_final[num_dia] = matriz_final[num_dia].fillna("S")
+                    elif d.weekday() == 6: matriz_final[num_dia] = matriz_final[num_dia].fillna("D")
+                    else: matriz_final[num_dia] = matriz_final[num_dia].fillna("F")
+                    
                 puntualidades, asistencias, desempenos = [], [], []
                 global_f, global_r, global_a = 0, 0, 0
                 for idx, fila in matriz_final.iterrows():
@@ -345,120 +330,32 @@ with tab_reporte:
                     asistencias.append(f"{((dias_laborables - f) / dias_laborables * 100) if dias_laborables > 0 else 0:.0f}%")
                     puntualidades.append(f"{((a + r - r) / (a + r) * 100) if (a + r) > 0 else 0:.0f}%")
                     desempenos.append("40%" if f > 0 else ("70%" if r > 0 else "100%"))
-                
+                    
                 matriz_final['PUNTUALIDAD'] = puntualidades
                 matriz_final['ASISTENCIA'] = asistencias
                 matriz_final['DESEMPEÑO'] = desempenos
                 matriz_final.columns = [str(c) for c in matriz_final.columns]
                 matriz_final['#Empleado'] = matriz_final['#Empleado'].astype(str).str.strip()
                 
-                # REEMPLAZO DE CRUCE DE SQL POR LECTURA DIRECTA DE ARCHIVO PERSONAL EXCEL
+                # Sincronización directa desde Excel de Personal
                 df_db_mapping = cargar_catalogo_personal()[['id_empleado', 'area']]
                 df_db_mapping['id_empleado'] = df_db_mapping['id_empleado'].astype(str).str.strip()
-                
                 matriz_final = matriz_final.merge(df_db_mapping, left_on='#Empleado', right_on='id_empleado', how='left')
                 matriz_final['area'] = matriz_final['area'].fillna("⚪ Sin Asignar").str.strip()
                 
                 for vv, vn in [("Sin Asignar", "⚪ Sin Asignar"), ("Corte Laser", "✂️ Corte Laser"), ("Doblez", "📐 Doblez"), ("Pintura", "🎨 Pintura"), ("Embarque", "📦 Embarque"), ("Calidad", "🔍 Calidad"), ("Dirección", "👑 Dirección"), ("Ingeniería", "⚙️ Ingeniería")]:
                     matriz_final.loc[matriz_final['area'] == vv, 'area'] = vn
-# ==============================================================================
-# SECCIÓN 7 (PARTE 1) - PESTAÑA DE PRE-NÓMINA Y PIVOTACIÓN
-# ==============================================================================
-with tab_reporte:
-    if os.path.exists(ruta_carpeta):
-        df_raw = procesar_base_asistencias(ruta_carpeta)
-        if df_raw is not None:
-            df_raw['util_hora'] = df_raw['Hora Entrada Raw'].apply(limpiar_registro_hora)
-            
-            lista_dias = []
-            curr = fecha_inicio
-            while curr <= fecha_fin:
-                lista_dias.append(curr)
-                curr += timedelta(days=1)
-                
-            codigos = []
-            for _, fila in df_raw.iterrows():
-                nave = str(fila.get('Nave Entrada', '')).strip().upper()
-                if "FALTA" in nave or pd.isna(fila['util_hora']): 
-                    codigos.append("F")
-                elif fila['util_hora'] > hora_limite_input: 
-                    codigos.append("R")
-                else: 
-                    codigos.append("A")
                     
-            df_raw['Cod_Incidencia'] = codigos
-            df_raw['Dia_Num'] = pd.to_datetime(df_raw['Fecha_Clean']).dt.day
-            df_raw['Fecha_date'] = pd.to_datetime(df_raw['Fecha_Clean'], errors='coerce').dt.date
-            
-            df_raw_filtrado = df_raw[(df_raw['Fecha_date'] >= fecha_inicio) & (df_raw['Fecha_date'] <= fecha_fin)]
-            columnas_dias_str = [str(d.day) for d in lista_dias]
-            
-            if df_raw_filtrado.empty:
-                st.info("💡 **Aviso del Sistema:** No se encontraron asistencias en el rango de fechas seleccionado en la barra lateral.")
-            else:
-                matriz = df_raw_filtrado.pivot_table(index=['#Empleado', 'Nombre del Empleado'], columns='Dia_Num', values='Cod_Incidencia', aggfunc='first')
-                for col_dia in [d.day for d in lista_dias]:
-                    if col_dia not in matriz.columns: 
-                        matriz[col_dia] = None
-                        
-                matriz = matriz[[d.day for d in lista_dias]]
-                matriz_final = matriz.copy().reset_index()
-# ==============================================================================
-# SECCIÓN 7 (PARTE 2) - EVALUACIÓN INDIVIDUAL Y CRUCE DE EXCEL
-# ==============================================================================
-                for d in lista_dias:
-                    num_dia = d.day
-                    if d.weekday() == 5: 
-                        matriz_final[num_dia] = matriz_final[num_dia].fillna("S")
-                    elif d.weekday() == 6: 
-                        matriz_final[num_dia] = matriz_final[num_dia].fillna("D")
-                    else: 
-                        matriz_final[num_dia] = matriz_final[num_dia].fillna("F")
-                        
-                puntualidades, asistencias, desempenos = [], [], []
-                global_f, global_r, global_a = 0, 0, 0
-                
-                for idx, fila in matriz_final.iterrows():
-                    record_dias = [fila[d.day] for d in lista_dias]
-                    dias_laborables = len([r for r in record_dias if r not in ["S", "D"]])
-                    f, r, a = record_dias.count("F"), record_dias.count("R"), record_dias.count("A")
-                    global_f += f; global_r += r; global_a += a
-                    
-                    asistencias.append(f"{((dias_laborables - f) / dias_laborables * 100) if dias_laborables > 0 else 0:.0f}%")
-                    puntualidades.append(f"{((a + r - r) / (a + r) * 100) if (a + r) > 0 else 0:.0f}%")
-                    desempenos.append("40%" if f > 0 else ("70%" if r > 0 else "100%"))
-                    
-                matriz_final['PUNTUALIDAD'] = puntualidades
-                matriz_final['ASISTENCIA'] = asistencias
-                matriz_final['DESEMPEÑO'] = desempenos
-                matriz_final.columns = [str(c) for c in matriz_final.columns]
-                matriz_final['#Empleado'] = matriz_final['#Empleado'].astype(str).str.strip()
-                
-                # Sincronización directa desde personal.xlsx para mapear las áreas
-                df_db_mapping = cargar_catalogo_personal()[['id_empleado', 'area']]
-                df_db_mapping['id_empleado'] = df_db_mapping['id_empleado'].astype(str).str.strip()
-                
-                matriz_final = matriz_final.merge(df_db_mapping, left_on='#Empleado', right_on='id_empleado', how='left')
-                matriz_final['area'] = matriz_final['area'].fillna("⚪ Sin Asignar").str.strip()
-                
-                for vv, vn in [("Sin Asignar", "⚪ Sin Asignar"), ("Corte Laser", "✂️ Corte Laser"), ("Doblez", "📐 Doblez"), ("Pintura", "🎨 Pintura"), ("Embarque", "📦 Embarque"), ("Calidad", "🔍 Calidad"), ("Dirección", "👑 Dirección"), ("Ingeniería", "⚙️ Ingeniería")]: 
-                    matriz_final.loc[matriz_final['area'] == vv, 'area'] = vn
-# ==============================================================================
-# SECCIÓN 7 (PARTE 3) - DASHBOARD VISUAL DE INDICADORES INTERACTIVOS
-# ==============================================================================
                 st.subheader("📊 Dashboard Global de Asistencias e Incidencias")
                 gt = global_a + global_r + global_f
                 ga_pct = (((gt - global_f) / gt * 100) if gt > 0 else 0)
                 gp_pct = ((global_a / (global_a + global_f + global_r) * 100) if (global_a + global_f + global_r) > 0 else 0)
                 
                 col_d1, col_d2, col_d3, col_d4 = st.columns(4)
-                with col_d1: 
-                    st.plotly_chart(dibujar_reloj_donut(ga_pct, "Asistencia Institucional", "#ffa500"), use_container_width=False)
-                with col_d2: 
-                    st.plotly_chart(dibujar_reloj_donut(gp_pct, "Puntualidad Global", "#00a2e8"), use_container_width=False)
-                with col_d3: 
-                    st.plotly_chart(dibujar_reloj_donut(max(0, 100 - ga_pct), "Tasa Ausentismo", "#ff0000"), use_container_width=False)
-                with col_d4: 
+                with col_d1: st.plotly_chart(dibujar_reloj_donut(ga_pct, "Asistencia Institucional", "#ffa500"), use_container_width=False)
+                with col_d2: st.plotly_chart(dibujar_reloj_donut(gp_pct, "Puntualidad Global", "#00a2e8"), use_container_width=False)
+                with col_d3: st.plotly_chart(dibujar_reloj_donut(max(0, 100 - ga_pct), "Tasa Ausentismo", "#ff0000"), use_container_width=False)
+                with col_d4:
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.metric("Total Colaboradores", f"{len(matriz_final)} Activos")
                     st.metric("Inasistencias Quincena", f"{global_f} Faltas")
@@ -490,7 +387,7 @@ with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
     
     cols_mostrar = ['#Empleado', 'Nombre del Empleado'] + columnas_dias_str + ['PUNTUALIDAD', 'ASISTENCIA', 'DESEMPEÑO']
     
-    # Preparación de hojas: Consolidado General + Una hoja por cada área asignada
+    # Preparación de hojas: Consolidado General + Una hoja independiente por cada área operativa
     lista_hojas_excel = [('CONSOLIDADO', matriz_final)] + [
         (ar.replace("👑 ", "").replace("⚙️ ", "").replace("🔍 ", "").replace("📐 ", "").replace("✂️ ", "").replace("🎨 ", "").replace("📦 ", "").replace("⚪ ", "")[:31], 
          matriz_final[matriz_final['area'] == ar]) for ar in AREAS_LISTA_RAW
@@ -510,7 +407,7 @@ with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
         ws.set_row(0, 18); ws.set_row(1, 15); ws.set_row(2, 15); ws.set_row(3, 22)
         ws.set_column('A:A', 12); ws.set_column('B:B', 35); ws.set_column('C:R', 4); ws.set_column('S:V', 14)
         
-        # Encabezado del Formato FO-RHU-23
+        # Encabezado del Formato Oficial de Calidad
         ws.write('A1', 'FO-RHU-23', fmt_meta_code)
         ws.write('A2', 'Revisión 01', fmt_meta_sub)
         ws.write('A3', '25 de mayo 2020', fmt_meta_sub)
@@ -540,34 +437,38 @@ with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
                 else: 
                     ws.write(fila_excel, col_excel, valor_dia, fmt_data_center)
                     
-            ws.write(fila_excel, 2 + len(columnas_dias_str), "", fmt_data_center) # Celda en Blanco para "Tiempo Extra (TE)"
+            ws.write(fila_excel, 2 + len(columnas_dias_str), "", fmt_data_center) # Celda para "Tiempo Extra (TE)"
             ws.write(fila_excel, 3 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['PUNTUALIDAD'], fmt_data_center)
             ws.write(fila_excel, 4 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['ASISTENCIA'], fmt_data_center)
             ws.write(fila_excel, 5 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['DESEMPEÑO'], fmt_data_center)
 # ==============================================================================
-# SECCIÓN 8 (PARTE 3) - FIRMAS, GLOSARIO Y ENLACE DE DESCARGA (.XLSX)
+# SECCIÓN 8 (PARTE 3) - FIRMAS, GLOSARIO Y ENLACE DE DESCARGA (CORREGIDA)
 # ==============================================================================
-            # Recuadro Oficial de Observaciones
+            # Recuadro de Observaciones acortado hasta la columna 18 para evitar OverlappingRange
             fila_obs = fila_inicio_datos + len(df_hoja) + 2
-            ws.merge_range(fila_obs, 0, fila_obs + 2, 22, "", workbook.add_format({'border': 1, 'border_color': '#FF0000', 'valign': 'top'}))
+            ws.merge_range(fila_obs, 0, fila_obs + 2, 18, "", workbook.add_format({'border': 1, 'border_color': '#FF0000', 'valign': 'top'}))
             ws.write(fila_obs, 0, " OBSERVACIONES: ", workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 9, 'color': '#FF0000'}))
             
-            # Glosario Reglamentario de Incidencias en la parte inferior
+            # Glosario de Incidencias en la parte inferior de la hoja
             fila_firmas = fila_obs + 5
             ws.write(fila_firmas, 1, "ASISTENCIA= A\nTIEMPO EXTRA= TE\nTRABAJO FORANEO= TF\nPERMISO= P\nFALTA= F\nVACACIONES= V\nINCAPACIDAD= I\nBONO PUNTUALIDAD= SÍ O NO\nBONO ASISTENCIA= SÍ O NO\nBONO DESEMPEÑO= 50, 75 ó 100%", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
-            ws.write(fila_firmas, 13, "NO LABORABLE CONVENIO= NLC\nDÍA FESTIVO LABORADO= DFL\nDIA DE DESCANSO LABORADO= DDL\nTIEMPO POR TIEMPO= TxT\nPERMISO SIN GOCE DE SUELDO= PSG\nSÁBADO= S\nDOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
+            ws.write(fila_firmas, 11, "NO LABORABLE CONVENIO= NLC\nDÍA FESTIVO LABORADO= DFL\nDIA DE DESCANSO LABORADO= DDL\nTIEMPO POR TIEMPO= TxT\nPERMISO SIN GOCE DE SUELDO= PSG\nSÁBADO= S\nDOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
             
             # Espacios y Leyendas Estructurales de Firmas Autorizadas
             fmt_linea_firma = workbook.add_format({'top': 1, 'top_color': '#000000', 'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
-            ws.write_blank(fila_firmas + 4, 5, fmt_linea_firma)
-            ws.merge_range(fila_firmas + 5, 4, fila_firmas + 5, 7, "FIRMA DIRECTOR GENERAL", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
-            ws.write_blank(fila_firmas + 4, 16, fmt_linea_firma)
-            ws.merge_range(fila_firmas + 5, 14, fila_firmas + 5, 18, "FIRMA GERENTE DE ÁREA", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+            
+            # Línea de firma Director (Celdas D a G unificadas)
+            ws.merge_range(fila_firmas + 4, 3, fila_firmas + 4, 6, "", fmt_linea_firma)
+            ws.merge_range(fila_firmas + 5, 3, fila_firmas + 5, 6, "FIRMA DIRECTOR GENERAL", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+            
+            # Línea de firma Gerente (Celdas M a P unificadas)
+            ws.merge_range(fila_firmas + 4, 12, fila_firmas + 4, 15, "", fmt_linea_firma)
+            ws.merge_range(fila_firmas + 5, 14, fila_firmas + 5, 17, "FIRMA GERENTE DE ÁREA", workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True}))
             
             # Pie de Página de Protección Intelectual de Industria Sigrama
             ws.write(fila_firmas + 8, 0, "FO-SGC-02 PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
 
-# Renderizado de Tablas Desglosadas por Área en la Interfaz de la Aplicación
+# Renderizado de Tablas Desglosadas por Área en la Interfaz de la Aplicación (UI)
 for ar in AREAS_LISTA_RAW:
     df_area_actual = matriz_final[matriz_final['area'] == ar]
     if not df_area_actual.empty:
@@ -581,7 +482,7 @@ for ar in AREAS_LISTA_RAW:
         st.markdown(f"**Factor Asistencia de la Celda:** `{((area_total_dias - c_f) / area_total_dias * 100) if area_total_dias > 0 else 0:.1f}%` | **Puntualidad:** `{((c_a / (c_a + c_r) * 100) if (c_a + c_r) > 0 else 0):.1f}%`")
         st.dataframe(df_area_actual[cols_mostrar].style.map(aplicar_colores_matriz, subset=columnas_dias_str), use_container_width=True)
 
-# Sección Final de Descarga del Libro Unificado
+# Sección Final de Descarga de los Reportes divididos
 st.markdown("---")
 st.subheader("📥 Guardar Libro de Pre-Nómina por Áreas")
 st.download_button(
