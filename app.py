@@ -32,6 +32,7 @@ except:
     GITHUB_TOKEN = None
 
 REPO_NAME = "jesusalbertomoraleslopez-byte/sigrama-prenomina-app"
+
 # ==============================================================================
 # SECCIÓN 2 - PANEL LATERAL Y CARGADOR DE ARCHIVOS
 # ==============================================================================
