@@ -453,38 +453,36 @@ with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
             ws.write(fila_excel, 5 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['DESEMPEÑO'], fmt_data_center)
             
 # ==============================================================================
-# SECCIÓN 8 (PARTE 3) - CORRECCIÓN DEFINITIVA CONTROLADA POR COLUMNA
+# SECCIÓN 8 (PARTE 3) - RECUADROS TOTALMENTE SEPARADOS SIN COLISIÓN
 # ==============================================================================
-            # Definimos la fila de inicio para observaciones aislada de las métricas
+            # Dejamos 2 renglones de espacio después del último empleado
             fila_obs = fila_inicio_datos + len(df_hoja) + 2
             
-            # Combinamos únicamente de forma VERTICAL dentro de la columna B (Columna 1)
-            # Esto da un bloque de 3 renglones de alto x 35 caracteres de ancho
-            ws.merge_range(fila_obs, 1, fila_obs + 2, 1, "", workbook.add_format({'border': 1, 'border_color': '#FF0000', 'valign': 'top'}))
+            # NOTA: Escribimos en texto plano en la Columna B (columna 1) sin combinar celdas
+            # Esto evita al 100% que XlsxWriter arroje OverlappingRange
             ws.write(fila_obs, 1, " OBSERVACIONES: ", workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 9, 'color': '#FF0000'}))
             
-            # Glosario Reglamentario de Incidencias (Ubicado limpiamente en la columna B)
-            fila_firmas = fila_obs + 5
-            ws.write(fila_firmas, 1, "ASISTENCIA= A\nTIEMPO EXTRA= TE\nTRABAJO FORANEO= TF\nPERMISO= P\nFALTA= F\nVACACIONES= V\nINCAPACIDAD= I\nBONO PUNTUALIDAD= SÍ O NO\nBONO ASISTENCIA= SÍ O NO\nBONO DESEMPEÑO= 50, 75 ó 100%", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
+            # Glosario Reglamentario de Incidencias en renglones independientes en la columna B
+            fila_firmas = fila_obs + 4
+            ws.write(fila_firmas, 1, "ASISTENCIA= A | TIEMPO EXTRA= TE | TRABAJO FORANEO= TF | PERMISO= P", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+            ws.write(fila_firmas + 1, 1, "FALTA= F | VACACIONES= V | INCAPACIDAD= I | SÁBADO= S | DOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+            ws.write(fila_firmas + 2, 1, "NO LABORABLE CONVENIO= NLC | DÍA FESTIVO LABORADO= DFL | DIA DE DESCANSO LABORADO= DDL", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
             
-            # Segunda parte del glosario (Ubicada de forma segura en la columna C)
-            ws.write(fila_firmas, 2, "NO LABORABLE CONVENIO= NLC\nDÍA FESTIVO LABORADO= DFL\nDIA DE DESCANSO LABORADO= DDL\nTIEMPO POR TIEMPO= TxT\nPERMISO SIN GOCE DE SUELDO= PSG\nSÁBADO= S\nDOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'text_wrap': True}))
-            
-            # Formatos Estructurales para Firmas Autorizadas
+            # Formatos limpios para las Firmas Autorizadas
             fmt_linea_firma = workbook.add_format({'top': 1, 'top_color': '#000000', 'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
             fmt_texto_firma = workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
             
-            # Espacio para Firmas Oficiales sin combinaciones horizontales peligrosas
-            # Firma Director General (Fila asignada en Columna B)
-            ws.write_blank(fila_firmas + 4, 1, fmt_linea_firma)
-            ws.write(fila_firmas + 5, 1, "FIRMA DIRECTOR GENERAL", fmt_texto_firma)
+            # Espacio para Firmas Oficiales de forma segura
+            # Firma Director General colocada limpiamente en la columna B (Nombre)
+            ws.write_blank(fila_firmas + 6, 1, fmt_linea_firma)
+            ws.write(fila_firmas + 7, 1, "FIRMA DIRECTOR GENERAL", fmt_texto_firma)
             
-            # Firma Gerente de Área (Fila asignada en Columna C)
-            ws.write_blank(fila_firmas + 4, 2, fmt_linea_firma)
-            ws.write(fila_firmas + 5, 2, "FIRMA GERENTE DE ÁREA", fmt_texto_firma)
+            # Firma Gerente de Área colocada limpiamente en la columna S (Métricas)
+            ws.write_blank(fila_firmas + 6, 19, fmt_linea_firma)
+            ws.write(fila_firmas + 7, 19, "FIRMA GERENTE DE ÁREA", fmt_texto_firma)
             
             # Pie de Página de Protección Intelectual de Industria Sigrama
-            ws.write(fila_firmas + 8, 0, "FO-SGC-02 PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
+            ws.write(fila_firmas + 10, 0, "FO-SGC-02 PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
 
 # Renderizado de Tablas Desglosadas por Área en la Interfaz de la Aplicación (UI)
 for ar in AREAS_LISTA_RAW:
