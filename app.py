@@ -254,7 +254,7 @@ with tab_areas:
             try:
                 df_editor.to_excel(ARCHIVO_PERSONAL, index=False)
                 if GITHUB_TOKEN:
-                    url_api_personal = f"https://github.com{REPO_NAME}/contents/{ARCHIVO_PERSONAL}"
+                    url_api_personal = f"https://github.com"
                     headers_github = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json", "User-Agent": "Streamlit-App"}
                     sha_personal = None
                     res_get = requests.get(url_api_personal, headers=headers_github, timeout=10)
