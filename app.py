@@ -30,7 +30,7 @@ NOMBRE_BANNER = "RH BANNER APP.png"
 if os.path.exists(NOMBRE_BANNER):
     st.image(
         NOMBRE_BANNER, 
-        use_container_width=True, 
+        use_container_width=True, LOGOTIPO COLOR 
         caption="Industria Sigrama S.A. de C.V. | Dirección Humana, Resultados e Innovación"
     )
 else:
@@ -154,19 +154,14 @@ def cargar_catalogo_personal():
         return df[df['id_empleado'].notna() & (df['id_empleado'] != 'nan')]
     except:
         return pd.DataFrame(columns=["id_empleado", "nombre", "area"])
-# ==============================================================================
-# SECCIÓN 5 - INTERFAZ CORPORATIVA Y PARSER DE HORAS
-# ==============================================================================
-logo_path = "LOGOTIPO COLOR (1).jfif"
-if os.path.exists(logo_path):
-    col_izq, col_logo, col_der = st.columns([0.35, 0.30, 0.35])
-    with col_logo:
-        st.image(logo_path, use_container_width=True)
-else:
-    st.title("Industria Sigrama - Control de Asistencias")
 
-st.markdown("<h3 style='text-align: center;'>👥 Portal de Capital Humano: Formato FO-RHU-23</h3>", unsafe_allow_html=True)
+
+# ==============================================================================
+# SECCIÓN 5 - INTERFAZ CORPORATIVA Y PARSER DE HORAS (CORREGIDA SIN DUPLICADOS)
+# ==============================================================================
+st.markdown("<h2 style='text-align: center;'>👥 Portal de Capital Humano: Formato FO-RHU-23</h2>", unsafe_allow_html=True)
 st.markdown("---")
+
 
 def limpiar_registro_hora(valor_celda):
     if pd.isna(valor_celda) or str(valor_celda).strip() == "":
