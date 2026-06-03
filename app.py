@@ -30,9 +30,10 @@ NOMBRE_BANNER = "RH BANNER APP.png"
 if os.path.exists(NOMBRE_BANNER):
     st.image(
         NOMBRE_BANNER, 
-        use_container_width=True, LOGOTIPO COLOR 
+        use_container_width=True,
         caption="Industria Sigrama S.A. de C.V. | Dirección Humana, Resultados e Innovación"
     )
+
 else:
     # Si el banner aún no se sube, muestra un título de respaldo limpio para que la app no falle
     st.title("🏭 Industria Sigrama S.A. de C.V.")
