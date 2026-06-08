@@ -337,6 +337,8 @@ with tab_areas:
 
 
 
+
+
 from reportlab.graphics.shapes import Drawing, String
 from reportlab.graphics.charts.piecharts import Pie
 
@@ -352,6 +354,10 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=12, spaceAfter=8, fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#333333"))
     style_seccion = ParagraphStyle('Seccion', parent=styles['Heading3'], spaceBefore=10, spaceAfter=10, fontName="Helvetica-Bold", fontSize=11, textColor=colors.HexColor("#FF0000"))
     
+    # Estilos internos para evitar textos encimados en las celdas
+    style_celda_nombre = ParagraphStyle('CeldaNombre', parent=styles['Normal'], fontSize=8, fontName="Helvetica")
+    style_celda_header = ParagraphStyle('CeldaHeader', parent=styles['Normal'], fontSize=8, fontName="Helvetica-Bold", textColor=colors.white, alignment=1)
+
     # 1. Encabezado del PDF
     story.append(Paragraph("INDUSTRIA SIGRAMA S.A. DE C.V.", style_titulo))
     story.append(Paragraph("<b>CONTROL DE PRE-NÓMINA - FORMATO OFICIAL FO-RHU-23</b>", style_sub))
@@ -414,33 +420,37 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     # 4. Tablas Separadas por Área Operativa con Columna BONO
     story.append(Paragraph("🏭 DESGLOSE ESTRUCTURADO POR ÁREA OPERATIVA", style_seccion))
     
-    # NUEVO: Se agrega la palabra 'BONO' al encabezado final
     columnas_encabezado = ['#Empleado', 'Nombre del Colaborador'] + columnas_dias + ['PUNTUALIDAD', 'ASISTENCIA', 'BONO']
     
     cant_dias = len(columnas_dias)
     ancho_id = 55
     ancho_nombre = 170
     ancho_metrica = 75
-    ancho_bono = 65  # Ancho de la nueva columna
+    ancho_bono = 65  
     ancho_dia_celda = max(20, (720 - ancho_id - ancho_nombre - (ancho_metrica * 2) - ancho_bono) / cant_dias)
     
     ancho_columnas = [ancho_id, ancho_nombre] + [ancho_dia_celda] * cant_dias + [ancho_metrica, ancho_metrica, ancho_bono]
     
     for ar in areas_lista:
+        # CORRECCIÓN CLAVE: Buscamos el área usando 'ar' directamente con su ícono para que coincida con el DataFrame
         df_area = matriz_final[matriz_final['area'] == ar]
         if df_area.empty:
             continue
             
-        nombre_limpio_area = ar.replace("⚪ ", "").replace("👑 ", "").replace("⚙️ ", "").replace("🔍 ", "").replace("📐 ", "").replace("✂️ ", "").replace("🎨 ", "").replace("📦 ", "")
-        story.append(Paragraph(f"📌 Área Operativa: {nombre_limpio_area}", style_area))
+        # Imprimimos el título de la sección mostrando el ícono completo en el PDF
+        story.append(Paragraph(f"📌 Área Operativa: {ar}", style_area))
         
-        tabla_datos = [columnas_encabezado]
+        # Estructuramos los encabezados de la tabla de forma segura
+        encabezados_parrafos = [Paragraph(f"<b>{col}</b>", style_celda_header) for col in columnas_encabezado]
+        tabla_datos = [encabezados_parrafos]
+        
         for _, fila in df_area.iterrows():
             fila_valores = []
             fila_valores.append(str(fila['#Empleado']))
-            fila_valores.append(str(fila['Nombre del Empleado']))
             
-            # Revisar las asistencias de los días para calcular el bono
+            # Formateamos el nombre como un párrafo para evitar que se encime con otras columnas
+            fila_valores.append(Paragraph(str(fila['Nombre del Empleado']), style_celda_nombre))
+            
             lista_asistencias_dias = []
             for d_str in columnas_dias:
                 valor_dia = str(fila[d_str]) if pd.notna(fila[d_str]) else "-"
@@ -450,7 +460,7 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
             fila_valores.append(str(fila['PUNTUALIDAD']))
             fila_valores.append(str(fila['ASISTENCIA']))
             
-            # NUEVO: Cálculo automático del porcentaje de Bono
+            # Cálculo automático del Bono
             faltas = lista_asistencias_dias.count("F")
             retardos = lista_asistencias_dias.count("R")
             
@@ -468,8 +478,6 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
         
         estilos_celdas = [
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#FF0000")),
-            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
             ('ALIGN', (0,0), (0,-1), 'CENTER'),
             ('ALIGN', (1,0), (1,-1), 'LEFT'),
             ('ALIGN', (2,0), (-1,-1), 'CENTER'),
@@ -500,6 +508,7 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     doc.build(story)
     buffer.seek(0)
     return buffer
+
 
 
 
