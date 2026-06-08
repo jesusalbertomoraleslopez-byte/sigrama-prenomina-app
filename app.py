@@ -336,28 +336,26 @@ with tab_areas:
                 st.error(f"Error: {e}")
 
 
+
 from reportlab.graphics.shapes import Drawing, String
 from reportlab.graphics.charts.piecharts import Pie
 
 def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, aus_pct, matriz_final, columnas_dias, areas_lista):
     buffer = io.BytesIO()
-    
     from reportlab.lib.pagesizes import letter, landscape
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
     
     styles = getSampleStyleSheet()
-    
-    style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], alignment=1, spaceAfter=4, fontName="Helvetica-Bold", fontSize=22)
-    style_sub = ParagraphStyle('Sub', parent=styles['Normal'], alignment=1, spaceAfter=12, fontSize=12, textColor=colors.HexColor("#555555"))
-    
-    # Reducimos el tamaño del título del Área Operativa
-    style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=12, spaceAfter=6, fontName="Helvetica-Bold", fontSize=15, textColor=colors.HexColor("#333333"))
-    style_seccion = ParagraphStyle('Seccion', parent=styles['Heading3'], spaceBefore=10, spaceAfter=8, fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#FF0000"))
+    style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], alignment=1, spaceAfter=5, fontName="Helvetica-Bold", fontSize=18)
+    style_sub = ParagraphStyle('Sub', parent=styles['Normal'], alignment=1, spaceAfter=15, fontSize=10, textColor=colors.HexColor("#555555"))
+    style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=12, spaceAfter=8, fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#333333"))
+    style_seccion = ParagraphStyle('Seccion', parent=styles['Heading3'], spaceBefore=10, spaceAfter=10, fontName="Helvetica-Bold", fontSize=11, textColor=colors.HexColor("#FF0000"))
     
     # 1. Encabezado del PDF
     story.append(Paragraph("INDUSTRIA SIGRAMA S.A. DE C.V.", style_titulo))
     story.append(Paragraph("<b>CONTROL DE PRE-NÓMINA - FORMATO OFICIAL FO-RHU-23</b>", style_sub))
+    story.append(Spacer(1, 10))
     
     # 2. Bloque de Filtros del Periodo Seleccionado
     story.append(Paragraph("📌 FILTROS Y CONFIGURACIÓN DEL PERIODO", style_seccion))
@@ -365,17 +363,18 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
         ["Fecha de Inicio Real:", f"{fecha_inicio}", "Hora Límite de Entrada:"],
         ["Fecha de Fin Real:", f"{fecha_fin}", f"{hora_limite}"]
     ]
-    t_filtros = Table(data_filtros, colWidths=[130, 130, 150])
+    t_filtros = Table(data_filtros, colWidths=[130, 200, 150, 100])
     t_filtros.setStyle(TableStyle([
         ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
         ('FONTNAME', (2,0), (2,-1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,-1), 10),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
         ('TEXTCOLOR', (0,0), (-1,-1), colors.HexColor("#333333")),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
     ]))
     story.append(t_filtros)
+    story.append(Spacer(1, 15))
     
-    # 3. Dibujo de Relojes Indicadores (Dashboard)
+    # 3. Dibujo de Relojes Indicadores (Dashboard Real)
     story.append(Paragraph("📊 RELOJES INDICADORES DEL DASHBOARD GLOBAL", style_seccion))
     
     tabla_relojes_datos = [[], []]
@@ -388,63 +387,60 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     ]
     
     for r in relojes_config:
-        d = Drawing(140, 80)
+        d = Drawing(160, 100)
         pc = Pie()
-        pc.x = 35
-        pc.y = 5
-        pc.width = 70
-        pc.height = 70
+        pc.x = 40
+        pc.y = 10
+        pc.width = 80
+        pc.height = 80
         pc.data = [r["pct"], max(0.1, 100 - r["pct"])]
-        pc.slices.fillColor = r["col"]
-        pc.slices.fillColor = colors.HexColor("#EAEAEA")
+        pc.slices[0].fillColor = r["col"]
+        pc.slices[1].fillColor = colors.HexColor("#EAEAEA")
         d.add(pc)
-        d.add(String(70, 33, f"{int(r['pct'])}%", textAnchor='middle', fontName='Helvetica-Bold', fontSize=12))
+        d.add(String(80, 42, f"{int(r['pct'])}%", textAnchor='middle', fontName='Helvetica-Bold', fontSize=14))
         
-        tabla_relojes_datos.append(d)
-        tabla_relojes_datos.append(Paragraph(f"<b>{r['tit']}</b>", ParagraphStyle('Tc', alignment=1, fontSize=11)))
+        tabla_relojes_datos[0].append(d)
+        tabla_relojes_datos[1].append(Paragraph(f"<b>{r['tit']}</b>", ParagraphStyle('Tc', alignment=1, fontSize=10)))
         
     t_relojes = Table(tabla_relojes_datos, colWidths=anchos_relojes)
     t_relojes.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0,1), (-1,1), 8),
+        ('BOTTOMPADDING', (0,1), (-1,1), 10),
     ]))
     story.append(t_relojes)
+    story.append(Spacer(1, 15))
     
-    # 4. Tablas Separadas por Área Operativa (30% Más Chicas)
+    # 4. Tablas Separadas por Área Operativa con Columna BONO
     story.append(Paragraph("🏭 DESGLOSE ESTRUCTURADO POR ÁREA OPERATIVA", style_seccion))
     
+    # NUEVO: Se agrega la palabra 'BONO' al encabezado final
     columnas_encabezado = ['#Empleado', 'Nombre del Colaborador'] + columnas_dias + ['PUNTUALIDAD', 'ASISTENCIA', 'BONO']
     
-    # Rediseño de columnas un 30% más compactas para asegurar que entren todas las tablas
     cant_dias = len(columnas_dias)
-    ancho_id = 65
-    ancho_nombre = 180
-    ancho_metrica = 85
-    ancho_bono = 65
-    ancho_dia_celda = max(25, (730 - ancho_id - ancho_nombre - (ancho_metrica * 2) - ancho_bono) / cant_dias)
+    ancho_id = 55
+    ancho_nombre = 170
+    ancho_metrica = 75
+    ancho_bono = 65  # Ancho de la nueva columna
+    ancho_dia_celda = max(20, (720 - ancho_id - ancho_nombre - (ancho_metrica * 2) - ancho_bono) / cant_dias)
     
     ancho_columnas = [ancho_id, ancho_nombre] + [ancho_dia_celda] * cant_dias + [ancho_metrica, ancho_metrica, ancho_bono]
-    
-    # Letra un 30% más chica para las celdas y encabezados de la tabla
-    style_celda_nombre = ParagraphStyle('CeldaNombre', parent=styles['Normal'], fontSize=10, fontName="Helvetica")
-    style_celda_header = ParagraphStyle('CeldaHeader', parent=styles['Normal'], fontSize=10, fontName="Helvetica-Bold", textColor=colors.white, alignment=1)
     
     for ar in areas_lista:
         df_area = matriz_final[matriz_final['area'] == ar]
         if df_area.empty:
             continue
             
-        story.append(Paragraph(f"📌 Área Operativa: {ar}", style_area))
+        nombre_limpio_area = ar.replace("⚪ ", "").replace("👑 ", "").replace("⚙️ ", "").replace("🔍 ", "").replace("📐 ", "").replace("✂️ ", "").replace("🎨 ", "").replace("📦 ", "")
+        story.append(Paragraph(f"📌 Área Operativa: {nombre_limpio_area}", style_area))
         
-        encabezados_parrafos = [Paragraph(f"<b>{col}</b>", style_celda_header) for col in columnas_encabezado]
-        tabla_datos = [encabezados_parrafos]
-        
+        tabla_datos = [columnas_encabezado]
         for _, fila in df_area.iterrows():
             fila_valores = []
             fila_valores.append(str(fila['#Empleado']))
-            fila_valores.append(Paragraph(str(fila['Nombre del Empleado']), style_celda_nombre))
+            fila_valores.append(str(fila['Nombre del Empleado']))
             
+            # Revisar las asistencias de los días para calcular el bono
             lista_asistencias_dias = []
             for d_str in columnas_dias:
                 valor_dia = str(fila[d_str]) if pd.notna(fila[d_str]) else "-"
@@ -454,6 +450,7 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
             fila_valores.append(str(fila['PUNTUALIDAD']))
             fila_valores.append(str(fila['ASISTENCIA']))
             
+            # NUEVO: Cálculo automático del porcentaje de Bono
             faltas = lista_asistencias_dias.count("F")
             retardos = lista_asistencias_dias.count("R")
             
@@ -469,16 +466,17 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
             
         t_area = Table(tabla_datos, colWidths=ancho_columnas, repeatRows=1)
         
-        # Reducimos la letra general de la tabla a 11 (30% menos que el tamaño 16 anterior)
         estilos_celdas = [
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#FF0000")),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
             ('ALIGN', (0,0), (0,-1), 'CENTER'),
             ('ALIGN', (1,0), (1,-1), 'LEFT'),
             ('ALIGN', (2,0), (-1,-1), 'CENTER'),
-            ('FONTSIZE', (0,0), (-1,-1), 11), 
-            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#A0A0A0")),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
-            ('TOPPADDING', (0,0), (-1,-1), 6),
+            ('FONTSIZE', (0,0), (-1,-1), 8),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#D3D3D3")),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]
         
@@ -502,11 +500,6 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     doc.build(story)
     buffer.seek(0)
     return buffer
-
-
-
-
-
 
 
 
