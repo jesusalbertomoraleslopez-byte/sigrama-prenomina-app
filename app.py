@@ -318,75 +318,160 @@ with tab_areas:
             except Exception as e:
                 st.error(f"Error: {e}")
 
-def generar_pdf_reporte(fecha_inicio, fecha_fin, ga_pct, gp_pct, aus_pct, matriz_final, columnas_dias, areas_lista):
+from reportlab.graphics.shapes import Drawing, String
+from reportlab.graphics.charts.piecharts import Pie
+
+def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, aus_pct, matriz_final, columnas_dias, areas_lista):
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    # Usamos orientación Horizontal (landscape) para que las tablas no se encimen
+    from reportlab.lib.pagesizes import letter, landscape
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
     
     styles = getSampleStyleSheet()
-    style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], alignment=1, spaceAfter=10)
-    style_sub = ParagraphStyle('Sub', parent=styles['Normal'], alignment=1, spaceAfter=20)
-    style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=15, spaceAfter=5)
+    style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], alignment=1, spaceAfter=5, fontName="Helvetica-Bold", fontSize=18)
+    style_sub = ParagraphStyle('Sub', parent=styles['Normal'], alignment=1, spaceAfter=15, fontSize=10, textColor=colors.HexColor("#555555"))
+    style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=12, spaceAfter=8, fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#333333"))
+    style_seccion = ParagraphStyle('Seccion', parent=styles['Heading3'], spaceBefore=10, spaceAfter=10, fontName="Helvetica-Bold", fontSize=11, textColor=colors.HexColor("#FF0000"))
     style_texto = styles['Normal']
     
-    # Encabezado del PDF
-    story.append(Paragraph("<b>INDUSTRIA SIGRAMA S.A. DE C.V.</b>", style_titulo))
-    story.append(Paragraph(f"Reporte de Pre-Nómina (FO-RHU-23) | Periodo: {fecha_inicio} al {fecha_fin}", style_sub))
+    # 1. Encabezado del PDF
+    story.append(Paragraph("INDUSTRIA SIGRAMA S.A. DE C.V.", style_titulo))
+    story.append(Paragraph("<b>CONTROL DE PRE-NÓMINA - FORMATO OFICIAL FO-RHU-23</b>", style_sub))
     story.append(Spacer(1, 10))
     
-    # Sección de Indicadores (Reemplazo de Relojes en Texto)
-    story.append(Paragraph("<b>📊 INDICADORES GLOBALES DEL PERIODO</b>", style_texto))
-    data_indicadores = [
-        ["Asistencia Institucional", "Puntualidad Global", "Tasa de Ausentismo"],
-        [f"{int(ga_pct)}%", f"{int(gp_pct)}%", f"{int(aus_pct)}%"]
+    # 2. Bloque de Filtros del Periodo Seleccionado
+    story.append(Paragraph("📌 FILTROS Y CONFIGURACIÓN DEL PERIODO", style_seccion))
+    data_filtros = [
+        ["Fecha de Inicio Real:", f"{fecha_inicio}", "Hora Límite de Entrada:"],
+        ["Fecha de Fin Real:", f"{fecha_fin}", f"{hora_limite}"]
     ]
-    t_ind = Table(data_indicadores, colWidths=[180, 180, 180])
-    t_ind.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
-        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
-        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
-        ('GRID', (0,0), (-1,-1), 1, colors.grey),
+    t_filtros = Table(data_filtros, colWidths=[120, 150, 150, 150])
+    t_filtros.setStyle(TableStyle([
+        ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
+        ('FONTNAME', (2,0), (2,-1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0,0), (-1,-1), 9),
+        ('TEXTCOLOR', (0,0), (-1,-1), colors.HexColor("#333333")),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
     ]))
-    story.append(t_ind)
-    story.append(Spacer(1, 20))
+    story.append(t_filtros)
+    story.append(Spacer(1, 15))
     
-    # Tablas separadas por Área
-    story.append(Paragraph("<b>🏭 DESGLOSE POR ÁREA OPERATIVA</b>", style_texto))
+    # 3. Dibujo de Relojes Indicadores (Dashboard Real)
+    story.append(Paragraph("📊 RELOJES INDICADORES DEL DASHBOARD GLOBAL", style_seccion))
     
-    cols_mostrar = ['#Empleado', 'Nombre del Empleado'] + columnas_dias + ['PUNTUALIDAD', 'ASISTENCIA']
+    # Contenedor para alinear los 3 relojes en fila
+    tabla_relojes_datos = [[], []]
+    anchos_relojes = [240, 240, 240]
+    
+    relojes_config = [
+        {"pct": ga_pct, "tit": "Asistencia Institucional", "col": colors.HexColor("#FFA500")},
+        {"pct": gp_pct, "tit": "Puntualidad Global", "col": colors.HexColor("#00A2E8")},
+        {"pct": aus_pct, "tit": "Tasa Ausentismo", "col": colors.HexColor("#FF0000")}
+    ]
+    
+    for r in relojes_config:
+        d = Drawing(160, 100)
+        pc = Pie()
+        pc.x = 30
+        pc.y = 10
+        pc.width = 80
+        pc.height = 80
+        pc.data = [r["pct"], max(0.1, 100 - r["pct"])]
+        pc.slices[0].fillColor = r["col"]
+        pc.slices[1].fillColor = colors.HexColor("#EAEAEA")
+        d.add(pc)
+        
+        # Texto del porcentaje en el centro del reloj
+        d.add(String(70, 42, f"{int(r['pct'])}%", textAnchor='middle', fontName='Helvetica-Bold', fontSize=14))
+        
+        tabla_relojes_datos[0].append(d)
+        tabla_relojes_datos[1].append(Paragraph(f"<b>{r['tit']}</b>", ParagraphStyle('Tc', alignment=1, fontSize=10)))
+        
+    t_relojes = Table(tabla_relojes_datos, colWidths=anchos_relojes)
+    t_relojes.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,1), (-1,1), 10),
+    ]))
+    story.append(t_relojes)
+    story.append(Spacer(1, 15))
+    
+    # 4. Tablas Separadas por Área Operativa
+    story.append(Paragraph("🏭 DESGLOSE ESTRUCTURADO POR ÁREA OPERATIVA", style_seccion))
+    
+    columnas_encabezado = ['#Empleado', 'Nombre del Colaborador'] + columnas_dias + ['PUNTUALIDAD', 'ASISTENCIA']
+    
+    # Definimos anchos fijos y amplios gracias al modo horizontal (landscape)
+    cant_dias = len(columnas_dias)
+    ancho_id = 60
+    ancho_nombre = 180
+    ancho_metrica = 85
+    ancho_dia_celda = max(20, (720 - ancho_id - ancho_nombre - (ancho_metrica * 2)) / cant_dias)
+    
+    ancho_columnas = [ancho_id, ancho_nombre] + [ancho_dia_celda] * cant_dias + [ancho_metrica, ancho_metrica]
     
     for ar in areas_lista:
         df_area = matriz_final[matriz_final['area'] == ar]
         if df_area.empty:
             continue
             
-        story.append(Paragraph(f"<b>{ar}</b>", style_area))
+        # Limpiamos los emojis raros para que ReportLab los pinte de forma correcta
+        nombre_limpio_area = ar.replace("⚪ ", "").replace("👑 ", "").replace("⚙️ ", "").replace("🔍 ", "").replace("📐 ", "").replace("✂️ ", "").replace("🎨 ", "").replace("📦 ", "")
+        story.append(Paragraph(f"📌 Área Operativa: {nombre_limpio_area}", style_area))
         
-        # Preparar datos para la tabla de ReportLab
-        tabla_datos = [cols_mostrar] # Encabezados
-        for _, fila in df_area[cols_mostrar].iterrows():
-            tabla_datos.append([str(celda) for celda in fila.values])
+        tabla_datos = [columnas_encabezado]
+        for _, fila in df_area.iterrows():
+            fila_valores = []
+            fila_valores.append(str(fila['#Empleado']))
+            fila_valores.append(str(fila['Nombre del Empleado']))
+            for d_str in columnas_dias:
+                fila_valores.append(str(fila[d_str]) if pd.notna(fila[d_str]) else "-")
+            fila_valores.append(str(fila['PUNTUALIDAD']))
+            fila_valores.append(str(fila['ASISTENCIA']))
+            tabla_datos.append(fila_valores)
             
-        # Ajustar tamaño de columnas para que quepa en la hoja letter
-        ancho_columnas = [50, 140] + [12] * len(columnas_dias) + [50, 50]
+        t_area = Table(tabla_datos, colWidths=ancho_columnas, repeatRows=1)
         
-        t_area = Table(tabla_datos, colWidths=ancho_columnas)
-        t_area.setStyle(TableStyle([
-            ('BACKGROUND', (0,0), (-1,0), colors.red),
+        # Estilos visuales de las celdas
+        estilos_celdas = [
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#FF0000")),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
-            ('ALIGN', (0,0), (1,-1), 'LEFT'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('ALIGN', (0,0), (0,-1), 'CENTER'),
+            ('ALIGN', (1,0), (1,-1), 'LEFT'),
             ('ALIGN', (2,0), (-1,-1), 'CENTER'),
             ('FONTSIZE', (0,0), (-1,-1), 8),
-            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
-        ]))
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#D3D3D3")),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+            ('TOPPADDING', (0,0), (-1,-1), 5),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]
+        
+        # Pintamos fondos condicionales según las incidencias (A, R, F)
+        for r_idx in range(1, len(tabla_datos)):
+            for c_idx in range(2, 2 + cant_dias):
+                valor_celda = tabla_datos[r_idx][c_idx]
+                if valor_celda in ["A", "R"]:
+                    estilos_celdas.append(('BACKGROUND', (c_idx, r_idx), (c_idx, r_idx), colors.HexColor("#D4EDDA")))
+                    estilos_celdas.append(('TEXTCOLOR', (c_idx, r_idx), (c_idx, r_idx), colors.HexColor("#155724")))
+                elif valor_celda == "F":
+                    estilos_celdas.append(('BACKGROUND', (c_idx, r_idx), (c_idx, r_idx), colors.HexColor("#F8D7DA")))
+                    estilos_celdas.append(('TEXTCOLOR', (c_idx, r_idx), (c_idx, r_idx), colors.HexColor("#721C24")))
+                elif valor_celda in ["S", "D"]:
+                    estilos_celdas.append(('BACKGROUND', (c_idx, r_idx), (c_idx, r_idx), colors.HexColor("#FFF3CD")))
+                    estilos_celdas.append(('TEXTCOLOR', (c_idx, r_idx), (c_idx, r_idx), colors.HexColor("#856404")))
+
+        t_area.setStyle(TableStyle(estilos_celdas))
         story.append(t_area)
         story.append(Spacer(1, 10))
         
     doc.build(story)
     buffer.seek(0)
     return buffer
+
+
+
 
 
 # ==============================================================================
