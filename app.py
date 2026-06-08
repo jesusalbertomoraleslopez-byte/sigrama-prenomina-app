@@ -336,8 +336,6 @@ with tab_areas:
                 st.error(f"Error: {e}")
 
 
-
-
 from reportlab.graphics.shapes import Drawing, String
 from reportlab.graphics.charts.piecharts import Pie
 
@@ -345,22 +343,21 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     buffer = io.BytesIO()
     
     from reportlab.lib.pagesizes import letter, landscape
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
     story = []
     
     styles = getSampleStyleSheet()
     
-    style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], alignment=1, spaceAfter=5, fontName="Helvetica-Bold", fontSize=28)
-    style_sub = ParagraphStyle('Sub', parent=styles['Normal'], alignment=1, spaceAfter=20, fontSize=16, textColor=colors.HexColor("#555555"))
+    style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], alignment=1, spaceAfter=4, fontName="Helvetica-Bold", fontSize=22)
+    style_sub = ParagraphStyle('Sub', parent=styles['Normal'], alignment=1, spaceAfter=12, fontSize=12, textColor=colors.HexColor("#555555"))
     
-    # 🌟 MEJORA: Hacemos el título del ÁREA OPERATIVA mucho más grande (Tamaño 24 y Negrita)
-    style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=22, spaceAfter=14, fontName="Helvetica-Bold", fontSize=24, textColor=colors.HexColor("#333333"))
-    style_seccion = ParagraphStyle('Seccion', parent=styles['Heading3'], spaceBefore=18, spaceAfter=15, fontName="Helvetica-Bold", fontSize=16, textColor=colors.HexColor("#FF0000"))
+    # Reducimos el tamaño del título del Área Operativa
+    style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=12, spaceAfter=6, fontName="Helvetica-Bold", fontSize=15, textColor=colors.HexColor("#333333"))
+    style_seccion = ParagraphStyle('Seccion', parent=styles['Heading3'], spaceBefore=10, spaceAfter=8, fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#FF0000"))
     
     # 1. Encabezado del PDF
     story.append(Paragraph("INDUSTRIA SIGRAMA S.A. DE C.V.", style_titulo))
     story.append(Paragraph("<b>CONTROL DE PRE-NÓMINA - FORMATO OFICIAL FO-RHU-23</b>", style_sub))
-    story.append(Spacer(1, 15))
     
     # 2. Bloque de Filtros del Periodo Seleccionado
     story.append(Paragraph("📌 FILTROS Y CONFIGURACIÓN DEL PERIODO", style_seccion))
@@ -368,16 +365,15 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
         ["Fecha de Inicio Real:", f"{fecha_inicio}", "Hora Límite de Entrada:"],
         ["Fecha de Fin Real:", f"{fecha_fin}", f"{hora_limite}"]
     ]
-    t_filtros = Table(data_filtros, colWidths=[160, 160, 200, 160])
+    t_filtros = Table(data_filtros, colWidths=[130, 130, 150])
     t_filtros.setStyle(TableStyle([
         ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
         ('FONTNAME', (2,0), (2,-1), 'Helvetica-Bold'),
-        ('FONTSIZE', (0,0), (-1,-1), 14),
+        ('FONTSIZE', (0,0), (-1,-1), 10),
         ('TEXTCOLOR', (0,0), (-1,-1), colors.HexColor("#333333")),
-        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
     ]))
     story.append(t_filtros)
-    story.append(Spacer(1, 20))
     
     # 3. Dibujo de Relojes Indicadores (Dashboard)
     story.append(Paragraph("📊 RELOJES INDICADORES DEL DASHBOARD GLOBAL", style_seccion))
@@ -392,65 +388,61 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     ]
     
     for r in relojes_config:
-        d = Drawing(200, 120)
+        d = Drawing(140, 80)
         pc = Pie()
-        pc.x = 50
-        pc.y = 10
-        pc.width = 100
-        pc.height = 100
+        pc.x = 35
+        pc.y = 5
+        pc.width = 70
+        pc.height = 70
         pc.data = [r["pct"], max(0.1, 100 - r["pct"])]
         pc.slices.fillColor = r["col"]
         pc.slices.fillColor = colors.HexColor("#EAEAEA")
         d.add(pc)
-        d.add(String(100, 50, f"{int(r['pct'])}%", textAnchor='middle', fontName='Helvetica-Bold', fontSize=18))
+        d.add(String(70, 33, f"{int(r['pct'])}%", textAnchor='middle', fontName='Helvetica-Bold', fontSize=12))
         
-        tabla_relojes_datos[0].append(d)
-        tabla_relojes_datos[1].append(Paragraph(f"<b>{r['tit']}</b>", ParagraphStyle('Tc', alignment=1, fontSize=14)))
+        tabla_relojes_datos.append(d)
+        tabla_relojes_datos.append(Paragraph(f"<b>{r['tit']}</b>", ParagraphStyle('Tc', alignment=1, fontSize=11)))
         
     t_relojes = Table(tabla_relojes_datos, colWidths=anchos_relojes)
     t_relojes.setStyle(TableStyle([
         ('ALIGN', (0,0), (-1,-1), 'CENTER'),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ('BOTTOMPADDING', (0,1), (-1,1), 15),
+        ('BOTTOMPADDING', (0,1), (-1,1), 8),
     ]))
     story.append(t_relojes)
-    story.append(Spacer(1, 25))
     
-    # 4. Tablas Separadas por Área Operativa
+    # 4. Tablas Separadas por Área Operativa (30% Más Chicas)
     story.append(Paragraph("🏭 DESGLOSE ESTRUCTURADO POR ÁREA OPERATIVA", style_seccion))
     
     columnas_encabezado = ['#Empleado', 'Nombre del Colaborador'] + columnas_dias + ['PUNTUALIDAD', 'ASISTENCIA', 'BONO']
     
+    # Rediseño de columnas un 30% más compactas para asegurar que entren todas las tablas
     cant_dias = len(columnas_dias)
-    ancho_id = 90
-    ancho_nombre = 260
-    ancho_metrica = 110
-    ancho_bono = 90
-    ancho_dia_celda = max(35, (730 - ancho_id - ancho_nombre - (ancho_metrica * 2) - ancho_bono) / cant_dias)
+    ancho_id = 65
+    ancho_nombre = 180
+    ancho_metrica = 85
+    ancho_bono = 65
+    ancho_dia_celda = max(25, (730 - ancho_id - ancho_nombre - (ancho_metrica * 2) - ancho_bono) / cant_dias)
     
     ancho_columnas = [ancho_id, ancho_nombre] + [ancho_dia_celda] * cant_dias + [ancho_metrica, ancho_metrica, ancho_bono]
     
-    # Estilo de párrafo interno específico para hacer el Nombre del Colaborador más pequeño
-    style_celda_nombre = ParagraphStyle('CeldaNombre', parent=styles['Normal'], fontSize=11, fontName="Helvetica")
-    style_celda_header = ParagraphStyle('CeldaHeader', parent=styles['Normal'], fontSize=14, fontName="Helvetica-Bold", textColor=colors.white, alignment=1)
+    # Letra un 30% más chica para las celdas y encabezados de la tabla
+    style_celda_nombre = ParagraphStyle('CeldaNombre', parent=styles['Normal'], fontSize=10, fontName="Helvetica")
+    style_celda_header = ParagraphStyle('CeldaHeader', parent=styles['Normal'], fontSize=10, fontName="Helvetica-Bold", textColor=colors.white, alignment=1)
     
     for ar in areas_lista:
         df_area = matriz_final[matriz_final['area'] == ar]
         if df_area.empty:
             continue
             
-        # 🌟 MEJORA: Aseguramos que se visualicen los iconos de área de forma íntegra en el PDF
         story.append(Paragraph(f"📌 Área Operativa: {ar}", style_area))
         
-        # Formateamos los encabezados de la tabla con párrafos para un control limpio
-        encabezados_párrafos = [Paragraph(f"<b>{col}</b>", style_celda_header) for col in columnas_encabezado]
-        tabla_datos = [encabezados_párrafos]
+        encabezados_parrafos = [Paragraph(f"<b>{col}</b>", style_celda_header) for col in columnas_encabezado]
+        tabla_datos = [encabezados_parrafos]
         
         for _, fila in df_area.iterrows():
             fila_valores = []
             fila_valores.append(str(fila['#Empleado']))
-            
-            # 🌟 MEJORA: Envolvemos el nombre en un Paragraph con letra más pequeña para optimizar espacio
             fila_valores.append(Paragraph(str(fila['Nombre del Empleado']), style_celda_nombre))
             
             lista_asistencias_dias = []
@@ -477,16 +469,16 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
             
         t_area = Table(tabla_datos, colWidths=ancho_columnas, repeatRows=1)
         
-        # Mantenemos las celdas generales grandes (tamaño 16) pero el nombre ya quedó controlado a 11
+        # Reducimos la letra general de la tabla a 11 (30% menos que el tamaño 16 anterior)
         estilos_celdas = [
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#FF0000")),
             ('ALIGN', (0,0), (0,-1), 'CENTER'),
             ('ALIGN', (1,0), (1,-1), 'LEFT'),
             ('ALIGN', (2,0), (-1,-1), 'CENTER'),
-            ('FONTSIZE', (0,0), (-1,-1), 16), 
-            ('GRID', (0,0), (-1,-1), 0.75, colors.HexColor("#A0A0A0")),
-            ('BOTTOMPADDING', (0,0), (-1,-1), 10),
-            ('TOPPADDING', (0,0), (-1,-1), 10),
+            ('FONTSIZE', (0,0), (-1,-1), 11), 
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#A0A0A0")),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+            ('TOPPADDING', (0,0), (-1,-1), 6),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]
         
@@ -505,11 +497,13 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
 
         t_area.setStyle(TableStyle(estilos_celdas))
         story.append(t_area)
-        story.append(Spacer(1, 15))
+        story.append(Spacer(1, 10))
         
     doc.build(story)
     buffer.seek(0)
     return buffer
+
+
 
 
 
