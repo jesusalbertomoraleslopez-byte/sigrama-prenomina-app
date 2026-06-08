@@ -243,7 +243,24 @@ def procesar_base_asistencias(carpeta):
     return None
 
 tab_reporte, tab_areas = st.tabs(["📊 Pre-Nómina y Reportes", "📂 Asignación de Áreas y Personal"])
-AREAS_LISTA_RAW = ["⚪ Sin Asignar", "👑 Dirección", "⚙️ Ingeniería", "🔍 Calidad", "📐 Doblez", "✂️ Corte Laser", "🎨 Pintura", "📦 Embarque"]
+
+# ==============================================================================
+# REEMPLAZA LA LÍNEA 241 CON ESTA NUEVA LISTA DE ÁREAS
+# ==============================================================================
+AREAS_LISTA_RAW = [
+    "⚪ Sin Asignar", 
+    "👑 Dirección", 
+    "⚙️ Ingenieria", 
+    "🔍 Calidad", 
+    "📐 Doblez", 
+    "✂️ Corte", 
+    "🎨 Pintura", 
+    "📦 Almacen", 
+    "🚚 Embarquez", 
+    "👥 Recursos Humanos"
+]
+
+
 
 with tab_areas:
     st.subheader("📝 Panel de Control de Plantilla y Estructura Organizacional")
