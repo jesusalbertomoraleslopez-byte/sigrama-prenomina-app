@@ -12,6 +12,11 @@ import streamlit as st
 import os
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
+
 
 # Configuración estética de la interfaz del navegador
 st.set_page_config(
@@ -312,6 +317,78 @@ with tab_areas:
                     st.rerun()
             except Exception as e:
                 st.error(f"Error: {e}")
+
+def generar_pdf_reporte(fecha_inicio, fecha_fin, ga_pct, gp_pct, aus_pct, matriz_final, columnas_dias, areas_lista):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    story = []
+    
+    styles = getSampleStyleSheet()
+    style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], alignment=1, spaceAfter=10)
+    style_sub = ParagraphStyle('Sub', parent=styles['Normal'], alignment=1, spaceAfter=20)
+    style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=15, spaceAfter=5)
+    style_texto = styles['Normal']
+    
+    # Encabezado del PDF
+    story.append(Paragraph("<b>INDUSTRIA SIGRAMA S.A. DE C.V.</b>", style_titulo))
+    story.append(Paragraph(f"Reporte de Pre-Nómina (FO-RHU-23) | Periodo: {fecha_inicio} al {fecha_fin}", style_sub))
+    story.append(Spacer(1, 10))
+    
+    # Sección de Indicadores (Reemplazo de Relojes en Texto)
+    story.append(Paragraph("<b>📊 INDICADORES GLOBALES DEL PERIODO</b>", style_texto))
+    data_indicadores = [
+        ["Asistencia Institucional", "Puntualidad Global", "Tasa de Ausentismo"],
+        [f"{int(ga_pct)}%", f"{int(gp_pct)}%", f"{int(aus_pct)}%"]
+    ]
+    t_ind = Table(data_indicadores, colWidths=[180, 180, 180])
+    t_ind.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+        ('GRID', (0,0), (-1,-1), 1, colors.grey),
+    ]))
+    story.append(t_ind)
+    story.append(Spacer(1, 20))
+    
+    # Tablas separadas por Área
+    story.append(Paragraph("<b>🏭 DESGLOSE POR ÁREA OPERATIVA</b>", style_texto))
+    
+    cols_mostrar = ['#Empleado', 'Nombre del Empleado'] + columnas_dias + ['PUNTUALIDAD', 'ASISTENCIA']
+    
+    for ar in areas_lista:
+        df_area = matriz_final[matriz_final['area'] == ar]
+        if df_area.empty:
+            continue
+            
+        story.append(Paragraph(f"<b>{ar}</b>", style_area))
+        
+        # Preparar datos para la tabla de ReportLab
+        tabla_datos = [cols_mostrar] # Encabezados
+        for _, fila in df_area[cols_mostrar].iterrows():
+            tabla_datos.append([str(celda) for celda in fila.values])
+            
+        # Ajustar tamaño de columnas para que quepa en la hoja letter
+        ancho_columnas = [50, 140] + [12] * len(columnas_dias) + [50, 50]
+        
+        t_area = Table(tabla_datos, colWidths=ancho_columnas)
+        t_area.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.red),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('ALIGN', (0,0), (1,-1), 'LEFT'),
+            ('ALIGN', (2,0), (-1,-1), 'CENTER'),
+            ('FONTSIZE', (0,0), (-1,-1), 8),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+        ]))
+        story.append(t_area)
+        story.append(Spacer(1, 10))
+        
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
 # ==============================================================================
 # SECCIÓN 7 - PIVOTACIÓN DE INCIDENCIAS Y MATRIZ DE CRUCE DE ÁREAS
 # ==============================================================================
@@ -530,4 +607,23 @@ st.download_button(
     data=buffer_excel.getvalue(), 
     file_name=f"FO-RHU-23_PRENOMINA_POR_AREAS_{fecha_fin.strftime('%Y%m%d')}.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+# Generar el archivo PDF en memoria
+pdf_data = generar_pdf_reporte(
+    fecha_inicio=fecha_inicio.strftime('%d/%m/%Y'),
+    fecha_fin=fecha_fin.strftime('%d/%m/%Y'),
+    ga_pct=ga_pct,
+    gp_pct=gp_pct,
+    aus_pct=max(0, 100 - ga_pct),
+    matriz_final=matriz_final,
+    columnas_dias=columnas_dias_str,
+    areas_lista=AREAS_LISTA_RAW
+)
+
+# Botón para descargar el PDF
+st.download_button(
+    label="📄 Descargar Reporte FO-RHU-23 en PDF",
+    data=pdf_data,
+    file_name=f"FO-RHU-23_PRENOMINA_{fecha_fin.strftime('%Y%m%d')}.pdf",
+    mime="application/pdf"
 )
