@@ -323,7 +323,6 @@ from reportlab.graphics.charts.piecharts import Pie
 
 def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, aus_pct, matriz_final, columnas_dias, areas_lista):
     buffer = io.BytesIO()
-    # Usamos orientación Horizontal (landscape) para que las tablas no se encimen
     from reportlab.lib.pagesizes import letter, landscape
     doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
@@ -333,7 +332,6 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     style_sub = ParagraphStyle('Sub', parent=styles['Normal'], alignment=1, spaceAfter=15, fontSize=10, textColor=colors.HexColor("#555555"))
     style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=12, spaceAfter=8, fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#333333"))
     style_seccion = ParagraphStyle('Seccion', parent=styles['Heading3'], spaceBefore=10, spaceAfter=10, fontName="Helvetica-Bold", fontSize=11, textColor=colors.HexColor("#FF0000"))
-    style_texto = styles['Normal']
     
     # 1. Encabezado del PDF
     story.append(Paragraph("INDUSTRIA SIGRAMA S.A. DE C.V.", style_titulo))
@@ -346,7 +344,7 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
         ["Fecha de Inicio Real:", f"{fecha_inicio}", "Hora Límite de Entrada:"],
         ["Fecha de Fin Real:", f"{fecha_fin}", f"{hora_limite}"]
     ]
-    t_filtros = Table(data_filtros, colWidths=[120, 150, 150, 150])
+    t_filtros = Table(data_filtros, colWidths=[130, 200, 150, 100])
     t_filtros.setStyle(TableStyle([
         ('FONTNAME', (0,0), (0,-1), 'Helvetica-Bold'),
         ('FONTNAME', (2,0), (2,-1), 'Helvetica-Bold'),
@@ -360,7 +358,6 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     # 3. Dibujo de Relojes Indicadores (Dashboard Real)
     story.append(Paragraph("📊 RELOJES INDICADORES DEL DASHBOARD GLOBAL", style_seccion))
     
-    # Contenedor para alinear los 3 relojes en fila
     tabla_relojes_datos = [[], []]
     anchos_relojes = [240, 240, 240]
     
@@ -373,7 +370,7 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     for r in relojes_config:
         d = Drawing(160, 100)
         pc = Pie()
-        pc.x = 30
+        pc.x = 40
         pc.y = 10
         pc.width = 80
         pc.height = 80
@@ -381,9 +378,7 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
         pc.slices[0].fillColor = r["col"]
         pc.slices[1].fillColor = colors.HexColor("#EAEAEA")
         d.add(pc)
-        
-        # Texto del porcentaje en el centro del reloj
-        d.add(String(70, 42, f"{int(r['pct'])}%", textAnchor='middle', fontName='Helvetica-Bold', fontSize=14))
+        d.add(String(80, 42, f"{int(r['pct'])}%", textAnchor='middle', fontName='Helvetica-Bold', fontSize=14))
         
         tabla_relojes_datos[0].append(d)
         tabla_relojes_datos[1].append(Paragraph(f"<b>{r['tit']}</b>", ParagraphStyle('Tc', alignment=1, fontSize=10)))
@@ -397,26 +392,26 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     story.append(t_relojes)
     story.append(Spacer(1, 15))
     
-    # 4. Tablas Separadas por Área Operativa
+    # 4. Tablas Separadas por Área Operativa con Columna BONO
     story.append(Paragraph("🏭 DESGLOSE ESTRUCTURADO POR ÁREA OPERATIVA", style_seccion))
     
-    columnas_encabezado = ['#Empleado', 'Nombre del Colaborador'] + columnas_dias + ['PUNTUALIDAD', 'ASISTENCIA']
+    # NUEVO: Se agrega la palabra 'BONO' al encabezado final
+    columnas_encabezado = ['#Empleado', 'Nombre del Colaborador'] + columnas_dias + ['PUNTUALIDAD', 'ASISTENCIA', 'BONO']
     
-    # Definimos anchos fijos y amplios gracias al modo horizontal (landscape)
     cant_dias = len(columnas_dias)
-    ancho_id = 60
-    ancho_nombre = 180
-    ancho_metrica = 85
-    ancho_dia_celda = max(20, (720 - ancho_id - ancho_nombre - (ancho_metrica * 2)) / cant_dias)
+    ancho_id = 55
+    ancho_nombre = 170
+    ancho_metrica = 75
+    ancho_bono = 65  # Ancho de la nueva columna
+    ancho_dia_celda = max(20, (720 - ancho_id - ancho_nombre - (ancho_metrica * 2) - ancho_bono) / cant_dias)
     
-    ancho_columnas = [ancho_id, ancho_nombre] + [ancho_dia_celda] * cant_dias + [ancho_metrica, ancho_metrica]
+    ancho_columnas = [ancho_id, ancho_nombre] + [ancho_dia_celda] * cant_dias + [ancho_metrica, ancho_metrica, ancho_bono]
     
     for ar in areas_lista:
         df_area = matriz_final[matriz_final['area'] == ar]
         if df_area.empty:
             continue
             
-        # Limpiamos los emojis raros para que ReportLab los pinte de forma correcta
         nombre_limpio_area = ar.replace("⚪ ", "").replace("👑 ", "").replace("⚙️ ", "").replace("🔍 ", "").replace("📐 ", "").replace("✂️ ", "").replace("🎨 ", "").replace("📦 ", "")
         story.append(Paragraph(f"📌 Área Operativa: {nombre_limpio_area}", style_area))
         
@@ -425,15 +420,33 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
             fila_valores = []
             fila_valores.append(str(fila['#Empleado']))
             fila_valores.append(str(fila['Nombre del Empleado']))
+            
+            # Revisar las asistencias de los días para calcular el bono
+            lista_asistencias_dias = []
             for d_str in columnas_dias:
-                fila_valores.append(str(fila[d_str]) if pd.notna(fila[d_str]) else "-")
+                valor_dia = str(fila[d_str]) if pd.notna(fila[d_str]) else "-"
+                fila_valores.append(valor_dia)
+                lista_asistencias_dias.append(valor_dia)
+                
             fila_valores.append(str(fila['PUNTUALIDAD']))
             fila_valores.append(str(fila['ASISTENCIA']))
+            
+            # NUEVO: Cálculo automático del porcentaje de Bono
+            faltas = lista_asistencias_dias.count("F")
+            retardos = lista_asistencias_dias.count("R")
+            
+            if faltas > 0:
+                porcentaje_bono = "40%"
+            elif retardos > 0:
+                porcentaje_bono = "70%"
+            else:
+                porcentaje_bono = "100%"
+                
+            fila_valores.append(porcentaje_bono)
             tabla_datos.append(fila_valores)
             
         t_area = Table(tabla_datos, colWidths=ancho_columnas, repeatRows=1)
         
-        # Estilos visuales de las celdas
         estilos_celdas = [
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#FF0000")),
             ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -448,7 +461,6 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]
         
-        # Pintamos fondos condicionales según las incidencias (A, R, F)
         for r_idx in range(1, len(tabla_datos)):
             for c_idx in range(2, 2 + cant_dias):
                 valor_celda = tabla_datos[r_idx][c_idx]
@@ -469,6 +481,7 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     doc.build(story)
     buffer.seek(0)
     return buffer
+
 
 
 
