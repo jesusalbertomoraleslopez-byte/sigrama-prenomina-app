@@ -694,9 +694,13 @@ st.download_button(
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
 # Generar el archivo PDF en memoria
+
+
+# 1. Ejecuta la función mejorada pasando las variables de control y horas
 pdf_data = generar_pdf_reporte(
     fecha_inicio=fecha_inicio.strftime('%d/%m/%Y'),
     fecha_fin=fecha_fin.strftime('%d/%m/%Y'),
+    hora_limite=hora_limite_input.strftime('%H:%M:%S'),
     ga_pct=ga_pct,
     gp_pct=gp_pct,
     aus_pct=max(0, 100 - ga_pct),
@@ -705,7 +709,7 @@ pdf_data = generar_pdf_reporte(
     areas_lista=AREAS_LISTA_RAW
 )
 
-# Botón para descargar el PDF
+# 2. Botón interactivo en la pantalla principal
 st.download_button(
     label="📄 Descargar Reporte FO-RHU-23 en PDF",
     data=pdf_data,
