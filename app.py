@@ -262,18 +262,24 @@ AREAS_LISTA_RAW = [
 
 
 
+
+
 with tab_areas:
     st.subheader("📝 Panel de Control de Plantilla y Estructura Organizacional")
+    
+    # 1. Cargamos el catálogo actual de personal
     df_db = cargar_catalogo_personal()
-
-
-    # ==============================================================================
-    # SECCIÓN 6 - SOLUCIÓN CORREGIDA (SIN ERROR DE VARIABLE)
-    # ==============================================================================
+    
+    # 2. Procesamos las asistencias de la carpeta (ESTA LÍNEA FALTA EN TU CÓDIGO)
+    df_asistencias_raw = procesar_base_asistencias(ruta_carpeta)
+    
+    # 3. Ponemos la variable de control en falso
+    cambio_detectado = False
+    
+    # 4. Buscamos nuevos empleados si hay asistencias cargadas
     if df_asistencias_raw is not None:
         empleados_nuevos = df_asistencias_raw[['#Empleado', 'Nombre del Empleado']].drop_duplicates()
         nuevos_registros = []
-        cambio_detectado = False # <--- ESTA LÍNEA CORRIGE EL ERROR
         
         for _, emp in empleados_nuevos.iterrows():
             id_e = str(emp['#Empleado']).strip()
@@ -282,17 +288,17 @@ with tab_areas:
             if id_e != 'nan' and id_e != '':
                 # Si el empleado YA existe en la base de datos
                 if id_e in df_db['id_empleado'].values:
-                    # Actualizamos su nombre por si cambió, pero DEJAMOS SU ÁREA INTACTA
+                    # Actualizamos su nombre por si cambió, dejando su área intacta
                     df_db.loc[df_db['id_empleado'] == id_e, 'nombre'] = nom_e
                 else:
-                    # SOLO si es un empleado totalmente nuevo, lo agregamos sin asignar
+                    # Si es un empleado nuevo, lo agregamos sin asignar
                     nuevos_registros.append({"id_empleado": id_e, "nombre": nom_e, "area": "⚪ Sin Asignar"})
                     cambio_detectado = True
-    
+
         if cambio_detectado and nuevos_registros:
             df_db = pd.concat([df_db, pd.DataFrame(nuevos_registros)], ignore_index=True)
         
-        # Guardamos de forma local para que persista durante el rerun de la sesión
+        # Guardamos localmente para que los cambios se mantengan en la pantalla
         df_db.to_excel(ARCHIVO_PERSONAL, index=False)
 
 
