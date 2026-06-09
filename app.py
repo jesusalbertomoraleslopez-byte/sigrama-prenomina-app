@@ -567,7 +567,7 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
 # ==============================================================================
 # SECCIÓN 7 - PIVOTACIÓN DE INCIDENCIAS Y MATRIZ DE CRUCE DE ÁREAS
 # ==============================================================================
-with tab_reporte:
+with tab_reportes:
     if os.path.exists(ruta_carpeta):
         df_raw = procesar_base_asistencias(ruta_carpeta)
         if df_raw is not None:
