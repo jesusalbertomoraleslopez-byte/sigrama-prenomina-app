@@ -609,14 +609,44 @@ with tab_reporte:
                 matriz_final.columns = [str(c) for c in matriz_final.columns]
                 matriz_final['#Empleado'] = matriz_final['#Empleado'].astype(str).str.strip()
                 
-                # Sincronización directa desde Excel de Personal
+
+
+                # Sincronización directa desde Excel de Personal (Corregida)
                 df_db_mapping = cargar_catalogo_personal()[['id_empleado', 'area']]
                 df_db_mapping['id_empleado'] = df_db_mapping['id_empleado'].astype(str).str.strip()
-                matriz_final = matriz_final.merge(df_db_mapping, left_on='#Empleado', right_on='id_empleado', how='left')
-                matriz_final['area'] = matriz_final['area'].fillna("⚪ Sin Asignar").str.strip()
                 
-                for vv, vn in [("Sin Asignar", "⚪ Sin Asignar"), ("Corte Laser", "✂️ Corte Laser"), ("Doblez", "📐 Doblez"), ("Pintura", "🎨 Pintura"), ("Embarque", "📦 Embarque"), ("Calidad", "🔍 Calidad"), ("Dirección", "👑 Dirección"), ("Ingeniería", "⚙️ Ingeniería")]:
-                    matriz_final.loc[matriz_final['area'] == vv, 'area'] = vn
+                # Unimos las tablas de forma limpia
+                matriz_final = matriz_final.merge(df_db_mapping, left_on='#Empleado', right_on='id_empleado', how='left')
+                
+                # Limpiamos el texto del área para evitar problemas
+                matriz_final['area'] = matriz_final['area'].fillna("⚪ Sin Asignar").astype(str).str.strip()
+        
+                # Diccionario de equivalencias exactas para asegurar que siempre tengan su ícono correspondiente
+                equivalencias_areas = {
+                    "Sin Asignar": "⚪ Sin Asignar",
+                    "Dirección": "👑 Dirección",
+                    "Ingeniería": "⚙️ Ingenieria",
+                    "Ingenieria": "⚙️ Ingenieria",
+                    "Calidad": "🔍 Calidad",
+                    "Doblez": "📐 Doblez",
+                    "Corte": "✂️ Corte",
+                    "Pintura": "🎨 Pintura",
+                    "Almacen": "📦 Almacen",
+                    "Embarquez": "🚚 Embarquez",
+                    "Recursos Humanos": "👥 Recursos Humanos"
+                }
+        
+                # Aplicamos la homologación quitando íconos viejos y poniendo el correcto
+                for area_llave, area_oficial in equivalencias_areas.items():
+                    matriz_final.loc[matriz_final['area'].str.contains(area_llave, case=False, na=False), 'area'] = area_oficial
+        
+
+
+
+
+
+
+                
                     
                 st.subheader("📊 Dashboard Global de Asistencias e Incidencias")
                 gt = global_a + global_r + global_f
