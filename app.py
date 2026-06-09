@@ -865,7 +865,10 @@ with tab_historico:
     else:
         df_hist = pd.DataFrame(columns=["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"])
 
-    # 2. PROCESAMOS LA SEMANA ACTUAL SI HAY DATOS CARGADOS
+
+    # ==============================================================================
+    # SECCIÓN HISTÓRICO - PARTE 1: PROCESAMIENTO Y FILTRO LABORAL
+    # ==============================================================================
     if 'matriz_final' in locals() and not matriz_final.empty and 'fecha_inicio' in locals():
         f_inicio = pd.to_datetime(fecha_inicio).date()
         f_fin = f_inicio + pd.Timedelta(days=6)
@@ -873,10 +876,25 @@ with tab_historico:
         num_semana = pd.to_datetime(fecha_inicio).isocalendar().week
         etiqueta_semana = f"Semana {num_semana}"
 
+        # --- FILTRO CRÍTICO: SOLO DÍAS DE LUNES A VIERNES ---
         columnas_dias_num = [c for c in matriz_final.columns if isinstance(c, (int, float)) or (isinstance(c, str) and c.isdigit())]
         
-        if columnas_dias_num:
-            valores_totales = matriz_final[columnas_dias_num].values.flatten()
+        columnas_validas_lu_vi = []
+        for col in columnas_dias_num:
+            try:
+                dia_mes = int(col)
+                # Reconstruimos la fecha de cada columna para validar el día de la semana
+                fecha_col = pd.to_datetime(f"{f_inicio.year}-{f_inicio.month}-{dia_mes}").date()
+                
+                # 0 es Lunes y 4 es Viernes. Sábados (5) y Domingos (6) quedan fuera.
+                if fecha_col.weekday() <= 4:
+                    columnas_validas_lu_vi.append(col)
+            except Exception:
+                pass
+
+        if columnas_validas_lu_vi:
+            # Extraemos los valores únicamente de los días laborales
+            valores_totales = matriz_final[columnas_validas_lu_vi].values.flatten()
             total_registros = len(valores_totales)
             
             conteo_asistencias = sum(1 for v in valores_totales if v in ['A', 'R'])
@@ -887,8 +905,11 @@ with tab_historico:
             porcentaje_puntualidad = round((conteo_puntuales / conteo_asistencias) * 100, 2) if conteo_asistencias > 0 else 0.0
             porcentaje_ausentismo = round((conteo_faltas / total_registros) * 100, 2) if total_registros > 0 else 0.0
             
-            st.info(f"📊 Datos listos para archivar: **{etiqueta_semana}** ({f_inicio.strftime('%d-%b-%y')} al {f_fin.strftime('%d-%b-%y')})")
-            
+            st.info(f"📊 Datos calculados (Lunes a Viernes): **{etiqueta_semana}** ({f_inicio.strftime('%d-%b-%y')} al {f_fin.strftime('%d-%b-%y')})")
+
+    # ==============================================================================
+    # SECCIÓN HISTÓRICO - PARTE 2: ARCHIVADO Y TABLA DE PROMEDIOS
+    # ==============================================================================
             if st.button("💾 Guardar esta Semana en la Tabla Histórica"):
                 if etiqueta_semana in df_hist['Semana'].values:
                     idx = df_hist[df_hist['Semana'] == etiqueta_semana].index
@@ -910,13 +931,12 @@ with tab_historico:
                 st.rerun()
     else:
         st.caption("💡 Ve a la primera pestaña para cargar un rango de asistencias y poder agregarlo aquí.")
-    # 3. DESPLIEGUE DE LA TABLA ESTILO EXCEL CON SU FILA DE PROMEDIO
-    # 3. DESPLIEGUE DE LA TABLA ESTILO EXCEL CON SU FILA DE PROMEDIO
+
     st.markdown("---")
     if not df_hist.empty:
         df_visual_tabla = df_hist.copy()
         
-        # Cálculo de promedios numéricos para la tabla y gráficos
+        # Saca promedios numéricos limpios quitando el símbolo '%'
         asist_num = df_visual_tabla['Asistencia'].str.rstrip('%').astype(float)
         punt_num = df_visual_tabla['Puntualidad'].str.rstrip('%').astype(float)
         ausen_num = df_visual_tabla['Tasa de Ausencia'].str.rstrip('%').astype(float)
@@ -936,8 +956,10 @@ with tab_historico:
         
         df_visual_tabla = pd.concat([df_visual_tabla, fila_promedio], ignore_index=True)
         st.dataframe(df_visual_tabla, use_container_width=True, hide_index=True)
-        
-        # --- FUNCIÓN GENERADORA DEL REPORTE PDF CON MEJORA DE BANNER Y 3 RELOJES ---
+
+        # ==============================================================================
+        # SECCIÓN HISTÓRICO - PARTE 3: MOTOR DE PDF PREMIUM Y BOTÓN
+        # ==============================================================================
         def generar_pdf_historico_premium(dataframe_final, v_asist, v_punt, v_ausen):
             import io
             import math
@@ -948,12 +970,11 @@ with tab_historico:
             from reportlab.graphics.shapes import Drawing, Circle, Line, String, Polygon
             
             buffer = io.BytesIO()
-            # Usamos márgenes de 30 puntos para aprovechar mejor el espacio horizontal para los 3 relojes
             doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
             story = []
             styles = getSampleStyleSheet()
             
-            # A. BANNER CORPORATIVO CORREGIDO (Proporción 2000x450 -> 550x124)
+            # A. ENCABEZADO: BANNER CORPORATIVO (Proporción exacta 2000x450 -> Alto 124)
             ruta_banner = "RH BANNER APP.png"
             if os.path.exists(ruta_banner):
                 try:
@@ -962,33 +983,25 @@ with tab_historico:
                 except Exception:
                     pass
             
-            # B. ENCABEZADOS DE PLANTA METALES SIGRAMA
+            # B. TÍTULOS DE PLANTA METALES
             titulo_estilo = ParagraphStyle(
-                'TituloPlanta',
-                parent=styles['Heading1'],
-                fontSize=22,
-                leading=26,
-                textColor=colors.HexColor('#2E4053'),
-                alignment=1,
-                spaceAfter=4
+                'TituloPlanta', parent=styles['Heading1'], fontSize=22, leading=26,
+                textColor=colors.HexColor('#2E4053'), alignment=1, spaceAfter=4
             )
             sub_estilo = ParagraphStyle(
-                'SubPlanta',
-                fontSize=11,
-                textColor=colors.HexColor('#566573'),
-                alignment=1,
-                spaceAfter=15
+                'SubPlanta', fontSize=11, textColor=colors.HexColor('#566573'),
+                alignment=1, spaceAfter=15
             )
             
             story.append(Paragraph("PLANTA METALES SIGRAMA", titulo_estilo))
             story.append(Paragraph("<b>Reporte Histórico de Indicadores Semanales — Formato FO-RHU-23</b>", sub_estilo))
             
-            # C. TABLA DE DATOS ESTILO EXCEL
+            # C. TABLA CON FILA PROMEDIO ESTILIZADA
             encabezados = [["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"]]
             cuerpo_tabla = dataframe_final.values.tolist()
             tabla_datos = encabezados + cuerpo_tabla
             
-            t = Table(tabla_datos, colWidths=[90, 85, 85, 95, 95, 100])
+            t = Table(tabla_datos, colWidths=[80, 85, 85, 95, 95, 110])
             estilo_tabla = TableStyle([
                 ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2E4053')),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.white),
@@ -1008,57 +1021,46 @@ with tab_historico:
             story.append(t)
             story.append(Spacer(1, 20))
             
-            # D. CREACIÓN DE LOS 3 RELOJES SIMULTÁNEOS HORIZONTALES
+            # D. CONSTRUCCIÓN DE CANVAS GRÁFICO PARA LOS 3 RELOJES HORIZONTALES
             story.append(Paragraph("<b>Paneles de Control de Rendimiento Histórico Promedio</b>", ParagraphStyle('Lbl', alignment=1, fontSize=12, textColor=colors.HexColor('#2C3E50'))))
             story.append(Spacer(1, 10))
             
-            # Canvas de dibujo ancho (550 puntos) para albergar 3 medidores pequeños
             d = Drawing(550, 110)
             
-            # Configuración para cada reloj (Posiciones X de los centros)
             relojes_config = [
                 {"cx": 90,  "val": v_asist, "titulo": "Asistencia", "color_txt": "#1E8449", "invertido": False},
                 {"cx": 275, "val": v_punt,  "titulo": "Puntualidad", "color_txt": "#2471A3", "invertido": False},
                 {"cx": 460, "val": v_ausen, "titulo": "Ausentismo", "color_txt": "#922B21", "invertido": True}
             ]
             
-            r = 75  # Radio reducido para que quepan los 3 relojes en la hoja
-            cy = 15 # Altura base del centro
+            r = 75  
+            cy = 15 
             
             for conf in relojes_config:
                 cx = conf["cx"]
                 val = max(0, min(100, conf["val"]))
                 
-                # Definición de colores de fondo según si el indicador es inverso (como el ausentismo)
                 c_bueno = colors.HexColor('#D5F5E3') if not conf["invertido"] else colors.HexColor('#FADBD8')
                 c_malo = colors.HexColor('#FADBD8') if not conf["invertido"] else colors.HexColor('#D5F5E3')
                 c_regular = colors.HexColor('#FCF3CF')
                 
-                # Dibujamos las zonas de efectividad (Polígonos adaptados al nuevo radio)
                 d.add(Polygon([cx-r, cy, cx-(r*0.8), cy+(r*0.6), cx, cy], fillColor=c_malo, strokeColor=None))
                 d.add(Polygon([cx-(r*0.8), cy+(r*0.6), cx, cy+r, cx+(r*0.5), cy+(r*0.86), cx, cy], fillColor=c_regular, strokeColor=None))
                 d.add(Polygon([cx+(r*0.5), cy+(r*0.86), cx+r, cy, cx, cy], fillColor=c_bueno, strokeColor=None))
                 
-                # Eje horizontal del medidor
                 d.add(Line(cx-r, cy, cx+r, cy, strokeColor=colors.HexColor('#7F8C8D'), strokeWidth=1.5))
                 
-                # Cálculo angular para la aguja
                 angulo_rad = math.radians(180 - (val * 1.8))
                 ax = cx + (r - 10) * math.cos(angulo_rad)
                 ay = cy + (r - 10) * math.sin(angulo_rad)
                 
-                # Dibujamos la aguja marcadora y el pivote
                 d.add(Line(cx, cy, ax, ay, strokeColor=colors.HexColor('#2C3E50'), strokeWidth=3))
                 d.add(Circle(cx, cy, 6, fillColor=colors.HexColor('#34495E'), strokeColor=colors.white, strokeWidth=1))
                 
-                # Guías de límites numéricos
                 d.add(String(cx - r - 12, cy + 3, "0%", fontName="Helvetica", fontSize=8, fillColor=colors.HexColor('#7F8C8D')))
                 d.add(String(cx + r + 3, cy + 3, "100%", fontName="Helvetica", fontSize=8, fillColor=colors.HexColor('#7F8C8D')))
                 
-                # Valor gigante del indicador centralizado abajo del pivote
                 d.add(String(cx - 18, cy + 18, f"{val}%", fontName="Helvetica-Bold", fontSize=14, fillColor=colors.HexColor(conf["color_txt"])))
-                
-                # Etiqueta de texto superior identificando el medidor
                 d.add(String(cx - 30, cy + r + 8, conf["titulo"], fontName="Helvetica-Bold", fontSize=9, fillColor=colors.HexColor('#34495E')))
             
             story.append(d)
@@ -1067,7 +1069,7 @@ with tab_historico:
             buffer.seek(0)
             return buffer.getvalue()
         
-        # --- BOTÓN DE DESCARGA EN INTERFAZ ---
+        # --- INTERFAZ: BOTÓN DE DESCARGA ---
         pdf_data = generar_pdf_historico_premium(df_visual_tabla, promedio_asist_val, promedio_punt_val, promedio_ausen_val)
         
         st.download_button(
@@ -1076,3 +1078,5 @@ with tab_historico:
             file_name="Reporte_Historico_Metales_Sigrama.pdf",
             mime="application/pdf"
         )
+    else:
+        st.info("La tabla histórica está vacía. Guarda una semana para ver el formato estilo Excel.")
