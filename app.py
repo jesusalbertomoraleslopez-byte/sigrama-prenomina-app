@@ -248,17 +248,18 @@ tab_reporte, tab_areas = st.tabs(["📊 Pre-Nómina y Reportes", "📂 Asignaci�
 # REEMPLAZA LA LÍNEA 241 CON ESTA NUEVA LISTA DE ÁREAS
 # ==============================================================================
 AREAS_LISTA_RAW = [
-    "⚪ Sin Asignar", 
-    "👑 Dirección", 
-    "⚙️ Ingenieria", 
-    "🔍 Calidad", 
-    "📐 Doblez", 
-    "✂️ Corte", 
-    "🎨 Pintura", 
-    "📦 Almacen", 
-    "🚚 Embarquez", 
+    "⚪ Sin Asignar",
+    "👑 Dirección",
+    "⚙️ Ingeniería",
+    "🔍 Calidad",
+    "📐 Doblez",
+    "✂️ Corte Laser",
+    "📦 Almacen",
+    "📦 Embarque",
+    "🎨 Pintura",
     "👥 Recursos Humanos"
 ]
+
 
 
 
@@ -618,32 +619,33 @@ with tab_reporte:
                 # Unimos las tablas de forma limpia
                 matriz_final = matriz_final.merge(df_db_mapping, left_on='#Empleado', right_on='id_empleado', how='left')
                 
-                # Limpiamos el texto del área para evitar problemas
+                # Limpiamos los espacios en blanco del área
                 matriz_final['area'] = matriz_final['area'].fillna("⚪ Sin Asignar").astype(str).str.strip()
         
-                # Diccionario de equivalencias exactas para asegurar que siempre tengan su ícono correspondiente
+                # Diccionario de equivalencias automáticas para corregir acentos o emojis mal puestos
                 equivalencias_areas = {
                     "Sin Asignar": "⚪ Sin Asignar",
                     "Dirección": "👑 Dirección",
-                    "Ingeniería": "⚙️ Ingenieria",
-                    "Ingenieria": "⚙️ Ingenieria",
+                    "Direccion": "👑 Dirección",
+                    "Ingeniería": "⚙️ Ingeniería",
+                    "Ingenieria": "⚙️ Ingeniería",
                     "Calidad": "🔍 Calidad",
                     "Doblez": "📐 Doblez",
-                    "Corte": "✂️ Corte",
-                    "Pintura": "🎨 Pintura",
+                    "Corte": "✂️ Corte Laser",
                     "Almacen": "📦 Almacen",
-                    "Embarquez": "🚚 Embarquez",
+                    "Embarque": "📦 Embarque",
+                    "Pintura": "🎨 Pintura",
                     "Recursos Humanos": "👥 Recursos Humanos"
                 }
         
-                # Aplicamos la homologación quitando íconos viejos y poniendo el correcto
+                # Corregimos el texto buscando palabras clave para que siempre aparezca el emoji correcto
                 for area_llave, area_oficial in equivalencias_areas.items():
                     matriz_final.loc[matriz_final['area'].str.contains(area_llave, case=False, na=False), 'area'] = area_oficial
-        
 
 
 
 
+                
 
 
                 
