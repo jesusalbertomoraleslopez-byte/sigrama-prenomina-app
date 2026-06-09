@@ -863,15 +863,12 @@ with tab_historico:
 
     # 2. PROCESAMOS LA SEMANA ACTUAL SI HAY DATOS CARGADOS
     if 'matriz_final' in locals() and not matriz_final.empty and 'fecha_inicio' in locals():
-        # Calculamos la fecha de fin sumando 6 días a la fecha de inicio
         f_inicio = pd.to_datetime(fecha_inicio).date()
         f_fin = f_inicio + pd.Timedelta(days=6)
         
-        # Obtenemos el número de semana del año de forma automática
         num_semana = pd.to_datetime(fecha_inicio).isocalendar().week
         etiqueta_semana = f"Semana {num_semana}"
 
-        # --- Extracción y Cálculo Limpio de Métricas ---
         columnas_dias_num = [c for c in matriz_final.columns if isinstance(c, (int, float)) or (isinstance(c, str) and c.isdigit())]
         
         if columnas_dias_num:
@@ -888,15 +885,12 @@ with tab_historico:
             
             st.info(f"📊 Datos listos para archivar: **{etiqueta_semana}** ({f_inicio.strftime('%d-%b-%y')} al {f_fin.strftime('%d-%b-%y')})")
             
-            # Botón estructurado para guardar renglón
             if st.button("💾 Guardar esta Semana en la Tabla Histórica"):
-                # Si la semana ya existe, actualizamos sus datos para evitar duplicados
                 if etiqueta_semana in df_hist['Semana'].values:
                     idx = df_hist[df_hist['Semana'] == etiqueta_semana].index
                     df_hist.loc[idx, ["Asistencia", "Puntualidad", "Tasa de Ausencia"]] = [f"{porcentaje_asistencia}%", f"{porcentaje_puntualidad}%", f"{porcentaje_ausentismo}%"]
                     st.warning(f"⚠️ Los datos de la {etiqueta_semana} se han actualizado.")
                 else:
-                    # Creamos el nuevo renglón con el formato exacto de tu tabla
                     nuevo_renglon = pd.DataFrame([{
                         "Semana": etiqueta_semana,
                         "Fecha Inicio": f_inicio.strftime('%d-%b-%y').lower(),
@@ -916,11 +910,9 @@ with tab_historico:
     # 3. DESPLIEGUE DE LA TABLA ESTILO EXCEL CON SU FILA DE PROMEDIO
     st.markdown("---")
     if not df_hist.empty:
-        # Hacemos una copia limpia para mostrar en pantalla sin alterar el archivo original
         df_visual_tabla = df_hist.copy()
         
-        # --- Cálculo automático de la fila PROMEDIO ---
-        # Convertimos los textos con '%' a números flotantes para poder promediar de forma exacta
+        # Cálculo de promedios numéricos
         asist_num = df_visual_tabla['Asistencia'].str.rstrip('%').astype(float)
         punt_num = df_visual_tabla['Puntualidad'].str.rstrip('%').astype(float)
         ausen_num = df_visual_tabla['Tasa de Ausencia'].str.rstrip('%').astype(float)
@@ -934,19 +926,81 @@ with tab_historico:
             "Tasa de Ausencia": f"{round(ausen_num.mean())}%"
         }])
         
-        # Unimos la fila de promedios al final de la tabla visual
         df_visual_tabla = pd.concat([df_visual_tabla, fila_promedio], ignore_index=True)
-        
-        # Mostramos la tabla formateada en Streamlit ocultando el índice por defecto
         st.dataframe(df_visual_tabla, use_container_width=True, hide_index=True)
         
-        # Gráfica de líneas interactiva (No toma en cuenta la fila PROMEDIO para no distorsionar)
+        # --- NUEVA FUNCIÓN: GENERADOR DEL REPORTE PDF ---
+        def generar_pdf_historico(dataframe_final):
+            import io
+            from reportlab.lib.pagesizes import letter
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib import colors
+            
+            buffer = io.BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+            story = []
+            styles = getSampleStyleSheet()
+            
+            # Título principal del reporte
+            titulo_estilo = ParagraphStyle(
+                'TituloPDF',
+                parent=styles['Heading1'],
+                fontSize=20,
+                leading=24,
+                textColor=colors.HexColor('#4A154B'),
+                alignment=1,
+                spaceAfter=15
+            )
+            story.append(Paragraph("📋 Reporte Histórico de Indicadores Semanales", titulo_estilo))
+            story.append(Paragraph("<b>Portal de Capital Humano - Formato FO-RHU-23</b>", ParagraphStyle('Sub', alignment=1, fontSize=10, spaceAfter=20)))
+            story.append(Spacer(1, 10))
+            
+            # Formateamos la estructura de los datos para la tabla del PDF
+            encabezados = [["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"]]
+            cuerpo_tabla = dataframe_final.values.tolist()
+            tabla_datos = encabezados + cuerpo_tabla
+            
+            # Diseñamos los anchos de columna y estilos visuales de la tabla
+            t = Table(tabla_datos, colWidths=[90, 85, 85, 85, 85, 100])
+            estilo_tabla = TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F4F4F6')),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.HexColor('#333333')),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0,0), (-1,-1), 8),
+                ('TOPPADDING', (0,0), (-1,-1), 8),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#DDDDDD')),
+            ])
+            
+            # Le aplicamos negrita y fondo especial únicamente a la fila "PROMEDIO" (la última)
+            total_filas = len(tabla_datos) - 1
+            estilo_tabla.add('FONTNAME', (0, total_filas), (-1, total_filas), 'Helvetica-Bold')
+            estilo_tabla.add('BACKGROUND', (0, total_filas), (-1, total_filas), colors.HexColor('#FAFAFA'))
+            
+            t.setStyle(estilo_tabla)
+            story.append(t)
+            
+            doc.build(story)
+            buffer.seek(0)
+            return buffer.getvalue()
+        
+        # --- BOTÓN DE DESCARGA EN INTERFAZ ---
+        pdf_data = generar_pdf_historico(df_visual_tabla)
+        
+        st.download_button(
+            label="📄 Descargar Reporte Histórico en PDF",
+            data=pdf_data,
+            file_name="Reporte_Historico_FO-RHU-23.pdf",
+            mime="application/pdf"
+        )
+        
+        # Gráfica de líneas interactiva
         st.markdown("### 📈 Tendencia de Indicadores")
         df_grafica = df_hist.copy()
-        df_grafica['Asistencia'] = df_grafica['Asistencia'].str.rstrip('%').astype(float)
+        df_grafica['Asistencia'] = df_grafica['Asifica'] = df_grafica['Asistencia'].str.rstrip('%').astype(float)
         df_grafica['Puntualidad'] = df_grafica['Puntualidad'].str.rstrip('%').astype(float)
         df_grafica['Tasa de Ausencia'] = df_grafica['Tasa de Ausencia'].str.rstrip('%').astype(float)
         st.line_chart(df_grafica.set_index("Semana")[["Asistencia", "Puntualidad", "Tasa de Ausencia"]])
     else:
         st.info("La tabla histórica está vacía. Guarda una semana para ver el formato estilo Excel.")
-
