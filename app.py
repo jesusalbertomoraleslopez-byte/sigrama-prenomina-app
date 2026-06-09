@@ -51,7 +51,7 @@ st.markdown("---") # Línea divisoria estética antes de iniciar los paneles y p
 ARCHIVO_PERSONAL = "personal.xlsx"
 ruta_carpeta = "./asistencias"
 
-if not os.path.exists(ruta_carpeta):|
+if not os.path.exists(ruta_carpeta):
     os.makedirs(ruta_carpeta)
 
 # --- RECONOCIMIENTO DEL TOKEN DESDE SECRETS ---
