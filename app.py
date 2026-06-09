@@ -865,7 +865,7 @@ with tab_historico:
     if 'matriz_final' in locals() and not matriz_final.empty and 'fecha_inicio' in locals():
         # Calculamos la fecha de fin sumando 6 días a la fecha de inicio
         f_inicio = pd.to_datetime(fecha_inicio).date()
-        f_fin = f_inicio + pd.timedelta(days=6)
+        f_fin = f_inicio + pd.Timedelta(days=6)
         
         # Obtenemos el número de semana del año de forma automática
         num_semana = pd.to_datetime(fecha_inicio).isocalendar().week
