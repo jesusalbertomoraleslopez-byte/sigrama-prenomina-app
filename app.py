@@ -842,6 +842,10 @@ st.download_button(
 # ==============================================================================
 # SECCIÓN - HISTÓRICO SEMANAL (CÁLCULO, REGISTRO Y GRÁFICAS)
 # ==============================================================================
+
+# ==============================================================================
+# SECCIÓN - HISTÓRICO SEMANAL (CÁLCULO, REGISTRO Y GRÁFICAS ESTILO EXCEL)
+# ==============================================================================
 with tab_historico:
     st.subheader("📈 Histórico General por Semana")
     st.write("Resumen consolidado de indicadores clave de la empresa.")
@@ -913,13 +917,13 @@ with tab_historico:
     st.markdown("---")
     if not df_hist.empty:
         # Hacemos una copia limpia para mostrar en pantalla sin alterar el archivo original
-        df_visual de la tabla = df_hist.copy()
+        df_visual_tabla = df_hist.copy()
         
         # --- Cálculo automático de la fila PROMEDIO ---
         # Convertimos los textos con '%' a números flotantes para poder promediar de forma exacta
-        asist_num = df_visual de la tabla['Asistencia'].str.rstrip('%').astype(float)
-        punt_num = df_visual de la tabla['Puntualidad'].str.rstrip('%').astype(float)
-        ausen_num = df_visual de la tabla['Tasa de Ausencia'].str.rstrip('%').astype(float)
+        asist_num = df_visual_tabla['Asistencia'].str.rstrip('%').astype(float)
+        punt_num = df_visual_tabla['Puntualidad'].str.rstrip('%').astype(float)
+        ausen_num = df_visual_tabla['Tasa de Ausencia'].str.rstrip('%').astype(float)
         
         fila_promedio = pd.DataFrame([{
             "Semana": "PROMEDIO",
@@ -931,10 +935,10 @@ with tab_historico:
         }])
         
         # Unimos la fila de promedios al final de la tabla visual
-        df_visual de la tabla = pd.concat([df_visual de la tabla, fila_promedio], ignore_index=True)
+        df_visual_tabla = pd.concat([df_visual_tabla, fila_promedio], ignore_index=True)
         
         # Mostramos la tabla formateada en Streamlit ocultando el índice por defecto
-        st.dataframe(df_visual de la tabla, use_container_width=True, hide_index=True)
+        st.dataframe(df_visual_tabla, use_container_width=True, hide_index=True)
         
         # Gráfica de líneas interactiva (No toma en cuenta la fila PROMEDIO para no distorsionar)
         st.markdown("### 📈 Tendencia de Indicadores")
@@ -945,3 +949,4 @@ with tab_historico:
         st.line_chart(df_grafica.set_index("Semana")[["Asistencia", "Puntualidad", "Tasa de Ausencia"]])
     else:
         st.info("La tabla histórica está vacía. Guarda una semana para ver el formato estilo Excel.")
+
