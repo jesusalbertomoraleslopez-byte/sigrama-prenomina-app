@@ -50,7 +50,7 @@ st.markdown("---") # Línea divisoria estética antes de iniciar los paneles y p
 ARCHIVO_PERSONAL = "personal.xlsx"
 ruta_carpeta = "./asistencias"
 
-if not os.path.exists(ruta_carpeta):
+if not os.path.exists(ruta_carpeta):|
     os.makedirs(ruta_carpeta)
 
 # --- RECONOCIMIENTO DEL TOKEN DESDE SECRETS ---
@@ -242,7 +242,19 @@ def procesar_base_asistencias(carpeta):
         return df_master
     return None
 
-tab_reporte, tab_areas = st.tabs(["📊 Pre-Nómina y Reportes", "📂 Asignación de Áreas y Personal"])
+
+
+# Declaración actualizada de las pestañas de la aplicación
+tab_reportes, tab_areas, tab_historico = st.tabs([
+    "📊 Pre-Nómina y Reportes", 
+    "📁 Asignación de Áreas y Personal",
+    "📈 Histórico Semanal"
+])
+
+
+
+
+
 
 # ==============================================================================
 # REEMPLAZA LA LÍNEA 241 CON ESTA NUEVA LISTA DE ÁREAS
