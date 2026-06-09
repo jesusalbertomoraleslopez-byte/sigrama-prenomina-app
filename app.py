@@ -843,108 +843,105 @@ st.download_button(
 # SECCIÓN - HISTÓRICO SEMANAL (CÁLCULO, REGISTRO Y GRÁFICAS)
 # ==============================================================================
 with tab_historico:
-    st.subheader("📈 Histórico de Asistencia, Puntualidad y Ausentismo")
-    st.write("Esta sección guarda y muestra el desempeño del personal acumulado por semanas.")
+    st.subheader("📈 Histórico General por Semana")
+    st.write("Resumen consolidado de indicadores clave de la empresa.")
 
     ARCHIVO_HISTORICO = "historico_semanal.xlsx"
 
-    # 1. FUNCIÓN PARA CARGAR EL HISTÓRICO EXISTENTE
-    def cargar_historico():
-        if os.path.exists(ARCHIVO_HISTORICO):
-            try:
-                df = pd.read_excel(ARCHIVO_HISTORICO)
-                df['Semana_Inicio'] = pd.to_datetime(df['Semana_Inicio']).dt.date
-                return df
-            except Exception:
-                return pd.DataFrame(columns=["Semana_Inicio", "Asistencia_%", "Puntualidad_%", "Ausentismo_%"])
-        else:
-            return pd.DataFrame(columns=["Semana_Inicio", "Asistencia_%", "Puntualidad_%", "Ausentismo_%"])
+    # 1. CARGAMOS EL HISTÓRICO EXISTENTE
+    if os.path.exists(ARCHIVO_HISTORICO):
+        try:
+            df_hist = pd.read_excel(ARCHIVO_HISTORICO)
+        except Exception:
+            df_hist = pd.DataFrame(columns=["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"])
+    else:
+        df_hist = pd.DataFrame(columns=["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"])
 
-    df_hist = cargar_historico()
-
-    # 2. PROCESAMIENTO AUTOMÁTICO DE LAS MÉTRICAS DE LA SEMANA ACTUAL
-    # Validamos que existan datos cargados en el sistema antes de procesar
+    # 2. PROCESAMOS LA SEMANA ACTUAL SI HAY DATOS CARGADOS
     if 'matriz_final' in locals() and not matriz_final.empty and 'fecha_inicio' in locals():
-        st.info("🔄 Sistema listo para compilar la semana actual seleccionada.")
+        # Calculamos la fecha de fin sumando 6 días a la fecha de inicio
+        f_inicio = pd.to_datetime(fecha_inicio).date()
+        f_fin = f_inicio + pd.timedelta(days=6)
         
-        # Obtenemos la fecha de inicio de la semana evaluada como identificador único
-        semana_actual_id = fecha_inicio if hasattr(fecha_inicio, 'date') else fecha_inicio
-        
-        # --- Cálculo de Métricas a partir de los códigos de incidencia ---
-        # Convertimos las columnas de días a una sola lista de valores para promediar
+        # Obtenemos el número de semana del año de forma automática
+        num_semana = pd.to_datetime(fecha_inicio).isocalendar().week
+        etiqueta_semana = f"Semana {num_semana}"
+
+        # --- Extracción y Cálculo Limpio de Métricas ---
         columnas_dias_num = [c for c in matriz_final.columns if isinstance(c, (int, float)) or (isinstance(c, str) and c.isdigit())]
         
         if columnas_dias_num:
             valores_totales = matriz_final[columnas_dias_num].values.flatten()
             total_registros = len(valores_totales)
             
-            # Contamos las incidencias base
-            conteo_asistencias = sum(1 for v in valores_totales if v in ['A', 'R']) # Asistencia Regular o Retardo
-            conteo_puntuales = sum(1 for v in valores_totales if v == 'A')         # Solo Asistencias a tiempo
-            conteo_faltas = sum(1 for v in valores_totales if v in ['F', 'S', 'D']) # Faltas, Suspensiones, etc.
+            conteo_asistencias = sum(1 for v in valores_totales if v in ['A', 'R'])
+            conteo_puntuales = sum(1 for v in valores_totales if v == 'A')
+            conteo_faltas = sum(1 for v in valores_totales if v in ['F', 'S', 'D'])
             
-            # Calculamos los porcentajes finales para el Dashboard Histórico
             porcentaje_asistencia = round((conteo_asistencias / total_registros) * 100, 2) if total_registros > 0 else 0.0
             porcentaje_puntualidad = round((conteo_puntuales / conteo_asistencias) * 100, 2) if conteo_asistencias > 0 else 0.0
             porcentaje_ausentismo = round((conteo_faltas / total_registros) * 100, 2) if total_registros > 0 else 0.0
             
-            # --- Panel de Cierre de Semana ---
-            st.markdown(f"### 📋 Métricas Calculadas para la semana del **{semana_actual_id}**")
-            col_m1, col_m2, col_m3 = st.columns(3)
-            col_m1.metric("Asistencia", f"{porcentaje_asistencia}%")
-            col_m2.metric("Puntualidad", f"{porcentaje_puntualidad}%")
-            col_m3.metric("Tasa Ausentismo", f"{porcentaje_ausentismo}%")
+            st.info(f"📊 Datos listos para archivar: **{etiqueta_semana}** ({f_inicio.strftime('%d-%b-%y')} al {f_fin.strftime('%d-%b-%y')})")
             
-            # Botón estructurado para escribir en la Base de Datos Histórica
-            if st.button("💾 Archivar y Guardar esta Semana en el Histórico"):
-                # Verificamos si la semana ya fue guardada previamente para no duplicar renglones
-                if semana_actual_id in df_hist['Semana_Inicio'].values:
-                    # Actualizamos los valores existentes en el renglón correspondiente
-                    idx = df_hist[df_hist['Semana_Inicio'] == semana_actual_id].index
-                    df_hist.loc[idx, ["Asistencia_%", "Puntualidad_%", "Ausentismo_%"]] = [porcentaje_asistencia, porcentaje_puntualidad, porcentaje_ausentismo]
-                    st.warning("⚠️ Esta semana ya existía. Se han actualizado los datos con la información más reciente.")
+            # Botón estructurado para guardar renglón
+            if st.button("💾 Guardar esta Semana en la Tabla Histórica"):
+                # Si la semana ya existe, actualizamos sus datos para evitar duplicados
+                if etiqueta_semana in df_hist['Semana'].values:
+                    idx = df_hist[df_hist['Semana'] == etiqueta_semana].index
+                    df_hist.loc[idx, ["Asistencia", "Puntualidad", "Tasa de Ausencia"]] = [f"{porcentaje_asistencia}%", f"{porcentaje_puntualidad}%", f"{porcentaje_ausentismo}%"]
+                    st.warning(f"⚠️ Los datos de la {etiqueta_semana} se han actualizado.")
                 else:
-                    # Agregamos un registro completamente nuevo
-                    nuevo_registro = pd.DataFrame([{
-                        "Semana_Inicio": semana_actual_id,
-                        "Asistencia_%": porcentaje_asistencia,
-                        "Puntualidad_%": porcentaje_puntualidad,
-                        "Ausentismo_%": porcentaje_ausentismo
+                    # Creamos el nuevo renglón con el formato exacto de tu tabla
+                    nuevo_renglon = pd.DataFrame([{
+                        "Semana": etiqueta_semana,
+                        "Fecha Inicio": f_inicio.strftime('%d-%b-%y').lower(),
+                        "Fecha Fin": f_fin.strftime('%d-%b-%y').lower(),
+                        "Asistencia": f"{porcentaje_asistencia}%",
+                        "Puntualidad": f"{porcentaje_puntualidad}%",
+                        "Tasa de Ausencia": f"{porcentaje_ausentismo}%"
                     }])
-                    df_hist = pd.concat([df_hist, nuevo_registro], ignore_index=True)
-                    st.success(f"✅ ¡Semana del {semana_actual_id} registrada exitosamente en la base de datos histórica!")
+                    df_hist = pd.concat([df_hist, nuevo_renglon], ignore_index=True)
+                    st.success(f"✅ ¡{etiqueta_semana} añadida con éxito!")
                 
-                # Guardamos localmente el archivo Excel actualizado
                 df_hist.to_excel(ARCHIVO_HISTORICO, index=False)
                 st.rerun()
     else:
-        st.warning("⚠️ Para guardar el histórico de una semana, primero debes cargar las asistencias correspondientes en la pestaña 'Pre-Nómina y Reportes'.")
+        st.caption("💡 Ve a la primera pestaña para cargar un rango de asistencias y poder agregarlo aquí.")
 
-    # 3. DESPLIEGUE VISUAL DE GRÁFICAS Y BASE DE DATOS ACUMULADA
+    # 3. DESPLIEGUE DE LA TABLA ESTILO EXCEL CON SU FILA DE PROMEDIO
     st.markdown("---")
-    st.subheader("📊 Gráficas de Tendencia Histórica")
-
     if not df_hist.empty:
-        # Ordenamos la información cronológicamente para que las gráficas tengan sentido
-        df_hist = df_hist.sort_values(by="Semana_Inicio").reset_index(drop=True)
+        # Hacemos una copia limpia para mostrar en pantalla sin alterar el archivo original
+        df_visual de la tabla = df_hist.copy()
         
-        # Formateamos el DataFrame indexado por fecha para la visualización nativa de Streamlit
-        df_grafica = df_hist.set_index("Semana_Inicio")
+        # --- Cálculo automático de la fila PROMEDIO ---
+        # Convertimos los textos con '%' a números flotantes para poder promediar de forma exacta
+        asist_num = df_visual de la tabla['Asistencia'].str.rstrip('%').astype(float)
+        punt_num = df_visual de la tabla['Puntualidad'].str.rstrip('%').astype(float)
+        ausen_num = df_visual de la tabla['Tasa de Ausencia'].str.rstrip('%').astype(float)
         
-        # Despliegue de la gráfica de líneas con las 3 métricas clave
-        st.line_chart(df_grafica[["Asistencia_%", "Puntualidad_%", "Ausentismo_%"]])
+        fila_promedio = pd.DataFrame([{
+            "Semana": "PROMEDIO",
+            "Fecha Inicio": "",
+            "Fecha Fin": "",
+            "Asistencia": f"{round(asist_num.mean())}%",
+            "Puntualidad": f"{round(punt_num.mean())}%",
+            "Tasa de Ausencia": f"{round(ausen_num.mean())}%"
+        }])
         
-        # Tabla detallada con los registros de la Base de Datos
-        st.markdown("### 🗃️ Registro de Semanas Archivadas")
-        st.dataframe(df_hist, use_container_width=True)
+        # Unimos la fila de promedios al final de la tabla visual
+        df_visual de la tabla = pd.concat([df_visual de la tabla, fila_promedio], ignore_index=True)
         
-        # Opción de descarga directa del reporte histórico en formato CSV o Excel
-        csv = df_hist.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            label="📥 Descargar Base de Datos Histórica (CSV)",
-            data=csv,
-            file_name="historico_sistema_asistencias.csv",
-            mime="text/csv"
-        )
+        # Mostramos la tabla formateada en Streamlit ocultando el índice por defecto
+        st.dataframe(df_visual de la tabla, use_container_width=True, hide_index=True)
+        
+        # Gráfica de líneas interactiva (No toma en cuenta la fila PROMEDIO para no distorsionar)
+        st.markdown("### 📈 Tendencia de Indicadores")
+        df_grafica = df_hist.copy()
+        df_grafica['Asistencia'] = df_grafica['Asistencia'].str.rstrip('%').astype(float)
+        df_grafica['Puntualidad'] = df_grafica['Puntualidad'].str.rstrip('%').astype(float)
+        df_grafica['Tasa de Ausencia'] = df_grafica['Tasa de Ausencia'].str.rstrip('%').astype(float)
+        st.line_chart(df_grafica.set_index("Semana")[["Asistencia", "Puntualidad", "Tasa de Ausencia"]])
     else:
-        st.info("💡 Aún no hay semanas guardadas en el histórico. Presiona el botón de arriba para comenzar a almacenar tu base de datos semanal.")
+        st.info("La tabla histórica está vacía. Guarda una semana para ver el formato estilo Excel.")
