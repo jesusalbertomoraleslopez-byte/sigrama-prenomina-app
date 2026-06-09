@@ -267,16 +267,19 @@ AREAS_LISTA_RAW = [
 with tab_areas:
     st.subheader("📝 Panel de Control de Plantilla y Estructura Organizacional")
     
-    # 1. Cargamos el catálogo actual de personal
+    # 1. Cargamos de forma estricta el catálogo actual (base de datos real)
     df_db = cargar_catalogo_personal()
     
-    # 2. Procesamos las asistencias de la carpeta (ESTA LÍNEA FALTA EN TU CÓDIGO)
+    # Aseguramos que los IDs sean texto limpio para comparar correctamente
+    if not df_db.empty:
+        df_db['id_empleado'] = df_db['id_empleado'].astype(str).str.strip()
+    
+    # 2. Procesamos las asistencias
     df_asistencias_raw = procesar_base_asistencias(ruta_carpeta)
     
-    # 3. Ponemos la variable de control en falso
     cambio_detectado = False
     
-    # 4. Buscamos nuevos empleados si hay asistencias cargadas
+    # 3. Solo si hay asistencias nuevas, buscamos si hay gente que NO exista en la base
     if df_asistencias_raw is not None:
         empleados_nuevos = df_asistencias_raw[['#Empleado', 'Nombre del Empleado']].drop_duplicates()
         nuevos_registros = []
@@ -286,20 +289,28 @@ with tab_areas:
             nom_e = str(emp['Nombre del Empleado']).strip()
             
             if id_e != 'nan' and id_e != '':
-                # Si el empleado YA existe en la base de datos
+                # REVISIÓN CRÍTICA: ¿El ID existe en nuestra base de datos guardada?
                 if id_e in df_db['id_empleado'].values:
-                    # Actualizamos su nombre por si cambió, dejando su área intacta
-                    df_db.loc[df_db['id_empleado'] == id_e, 'nombre'] = nom_e
+                    # SI YA EXISTE, NO MODIFICAMOS EL ÁREA NI EL RENGLÓN.
+                    # Solo actualizamos el nombre si venía vacío en el registro
+                    idx = df_db[df_db['id_empleado'] == id_e].index[0]
+                    if pd.isna(df_db.loc[idx, 'nombre']) or df_db.loc[idx, 'nombre'] == '':
+                        df_db.loc[idx, 'nombre'] = nom_e
+                        cambio_detectado = True
                 else:
-                    # Si es un empleado nuevo, lo agregamos sin asignar
-                    nuevos_registros.append({"id_empleado": id_e, "nombre": nom_e, "area": "⚪ Sin Asignar"})
+                    # SI ES UN ID TOTALMENTE NUEVO, se agrega al final como Sin Asignar
+                    nuevos_registros.append({
+                        "id_empleado": id_e, 
+                        "nombre": nom_e, 
+                        "area": "⚪ Sin Asignar"
+                    })
                     cambio_detectado = True
 
-        if cambio_detectado and nuevos_registros:
+        if nuevos_registros:
             df_db = pd.concat([df_db, pd.DataFrame(nuevos_registros)], ignore_index=True)
         
-        # Guardamos localmente para que los cambios se mantengan en la pantalla
-        df_db.to_excel(ARCHIVO_PERSONAL, index=False)
+        if cambio_detectado:
+            df_db.to_excel(ARCHIVO_PERSONAL, index=False)
 
 
 
