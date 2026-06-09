@@ -266,13 +266,14 @@ with tab_areas:
     st.subheader("📝 Panel de Control de Plantilla y Estructura Organizacional")
     df_db = cargar_catalogo_personal()
 
-    
+
     # ==============================================================================
-    # SECCIÓN 6 - SOLUCIÓN CORREGIDA PARA NO BORRAR ÁREAS
+    # SECCIÓN 6 - SOLUCIÓN CORREGIDA (SIN ERROR DE VARIABLE)
     # ==============================================================================
     if df_asistencias_raw is not None:
         empleados_nuevos = df_asistencias_raw[['#Empleado', 'Nombre del Empleado']].drop_duplicates()
         nuevos_registros = []
+        cambio_detectado = False # <--- ESTA LÍNEA CORRIGE EL ERROR
         
         for _, emp in empleados_nuevos.iterrows():
             id_e = str(emp['#Empleado']).strip()
@@ -295,6 +296,8 @@ with tab_areas:
         df_db.to_excel(ARCHIVO_PERSONAL, index=False)
 
 
+
+    
 
 
     
