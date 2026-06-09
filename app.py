@@ -843,9 +843,13 @@ st.download_button(
 # SECCIÓN - HISTÓRICO SEMANAL (CÁLCULO, REGISTRO Y GRÁFICAS)
 # ==============================================================================
 
+
+
 # ==============================================================================
 # SECCIÓN - HISTÓRICO SEMANAL (CÁLCULO, REGISTRO Y GRÁFICAS ESTILO EXCEL)
 # ==============================================================================
+
+
 with tab_historico:
     st.subheader("📈 Histórico General por Semana")
     st.write("Resumen consolidado de indicadores clave de la empresa.")
@@ -906,101 +910,149 @@ with tab_historico:
                 st.rerun()
     else:
         st.caption("💡 Ve a la primera pestaña para cargar un rango de asistencias y poder agregarlo aquí.")
-
     # 3. DESPLIEGUE DE LA TABLA ESTILO EXCEL CON SU FILA DE PROMEDIO
     st.markdown("---")
     if not df_hist.empty:
         df_visual_tabla = df_hist.copy()
         
-        # Cálculo de promedios numéricos
+        # Cálculo de promedios numéricos para la tabla y gráficos
         asist_num = df_visual_tabla['Asistencia'].str.rstrip('%').astype(float)
         punt_num = df_visual_tabla['Puntualidad'].str.rstrip('%').astype(float)
         ausen_num = df_visual_tabla['Tasa de Ausencia'].str.rstrip('%').astype(float)
+        
+        promedio_asist_val = round(asist_num.mean())
+        promedio_punt_val = round(punt_num.mean())
+        promedio_ausen_val = round(ausen_num.mean())
         
         fila_promedio = pd.DataFrame([{
             "Semana": "PROMEDIO",
             "Fecha Inicio": "",
             "Fecha Fin": "",
-            "Asistencia": f"{round(asist_num.mean())}%",
-            "Puntualidad": f"{round(punt_num.mean())}%",
-            "Tasa de Ausencia": f"{round(ausen_num.mean())}%"
+            "Asistencia": f"{promedio_asist_val}%",
+            "Puntualidad": f"{promedio_punt_val}%",
+            "Tasa de Ausencia": f"{promedio_ausen_val}%"
         }])
         
         df_visual_tabla = pd.concat([df_visual_tabla, fila_promedio], ignore_index=True)
         st.dataframe(df_visual_tabla, use_container_width=True, hide_index=True)
         
-        # --- NUEVA FUNCIÓN: GENERADOR DEL REPORTE PDF ---
-        def generar_pdf_historico(dataframe_final):
+        # --- FUNCIÓN GENERADORA DEL REPORTE PDF CON IMAGEN Y RELOJ ---
+        def generar_pdf_historico_premium(dataframe_final, val_reloj):
             import io
+            import math
             from reportlab.lib.pagesizes import letter
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
             from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
             from reportlab.lib import colors
+            from reportlab.graphics.shapes import Drawing, Circle, Line, String, Polygon
             
             buffer = io.BytesIO()
             doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
             story = []
             styles = getSampleStyleSheet()
             
-            # Título principal del reporte
+            # A. AGREGAR BANNER DE IMAGEN CORPORATIVA
+            ruta_banner = "RH BANNER APP.png"
+            if os.path.exists(ruta_banner):
+                try:
+                    story.append(RLImage(ruta_banner, width=530, height=80))
+                    story.append(Spacer(1, 15))
+                except Exception:
+                    pass
+            
+            # B. ENCABEZADOS DE PLANTA METALES SIGRAMA
             titulo_estilo = ParagraphStyle(
-                'TituloPDF',
+                'TituloPlanta',
                 parent=styles['Heading1'],
-                fontSize=20,
-                leading=24,
-                textColor=colors.HexColor('#4A154B'),
+                fontSize=22,
+                leading=26,
+                textColor=colors.HexColor('#2E4053'),
                 alignment=1,
-                spaceAfter=15
+                spaceAfter=5
             )
-            story.append(Paragraph("📋 Reporte Histórico de Indicadores Semanales", titulo_estilo))
-            story.append(Paragraph("<b>Portal de Capital Humano - Formato FO-RHU-23</b>", ParagraphStyle('Sub', alignment=1, fontSize=10, spaceAfter=20)))
+            sub_estilo = ParagraphStyle(
+                'SubPlanta',
+                fontSize=11,
+                textColor=colors.HexColor('#566573'),
+                alignment=1,
+                spaceAfter=20
+            )
+            
+            story.append(Paragraph("PLANTA METALES SIGRAMA", titulo_estilo))
+            story.append(Paragraph("<b>Reporte Histórico de Indicadores Semanales — Formato FO-RHU-23</b>", sub_estilo))
             story.append(Spacer(1, 10))
             
-            # Formateamos la estructura de los datos para la tabla del PDF
+            # C. TABLA DE DATOS ESTILO EXCEL
             encabezados = [["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"]]
             cuerpo_tabla = dataframe_final.values.tolist()
             tabla_datos = encabezados + cuerpo_tabla
             
-            # Diseñamos los anchos de columna y estilos visuales de la tabla
-            t = Table(tabla_datos, colWidths=[90, 85, 85, 85, 85, 100])
+            t = Table(tabla_datos, colWidths=[80, 85, 85, 90, 90, 100])
             estilo_tabla = TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#F4F4F6')),
-                ('TEXTCOLOR', (0,0), (-1,0), colors.HexColor('#333333')),
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2E4053')),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.white),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                 ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
                 ('BOTTOMPADDING', (0,0), (-1,-1), 8),
                 ('TOPPADDING', (0,0), (-1,-1), 8),
-                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#DDDDDD')),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#BDC3C7')),
             ])
             
-            # Le aplicamos negrita y fondo especial únicamente a la fila "PROMEDIO" (la última)
+            # Resaltado especial para la fila final de PROMEDIO
             total_filas = len(tabla_datos) - 1
             estilo_tabla.add('FONTNAME', (0, total_filas), (-1, total_filas), 'Helvetica-Bold')
-            estilo_tabla.add('BACKGROUND', (0, total_filas), (-1, total_filas), colors.HexColor('#FAFAFA'))
+            estilo_tabla.add('BACKGROUND', (0, total_filas), (-1, total_filas), colors.HexColor('#EAEDED'))
+            estilo_tabla.add('TEXTCOLOR', (0, total_filas), (-1, total_filas), colors.HexColor('#2C3E50'))
             
             t.setStyle(estilo_tabla)
             story.append(t)
+            story.append(Spacer(1, 30))
+            
+            # D. CREACIÓN DE GRÁFICO DE RELOJ (GAUGE)
+            story.append(Paragraph("<b>Medidor de Promedio de Asistencia General</b>", ParagraphStyle('Lbl', alignment=1, fontSize=12, textColor=colors.HexColor('#2C3E50'))))
+            story.append(Spacer(1, 10))
+            
+            d = Drawing(400, 140)
+            cx, cy, r = 200, 20, 100
+            
+            # Zonas de color de fondo
+            d.add(Polygon([cx-100, cy, cx-80, cy+60, cx, cy], fillColor=colors.HexColor('#FADBD8'), strokeColor=None))
+            d.add(Polygon([cx-80, cy+60, cx, cy+100, cx+50, cy+86, cx, cy], fillColor=colors.HexColor('#FCF3CF'), strokeColor=None))
+            d.add(Polygon([cx+50, cy+86, cx+100, cy, cx, cy], fillColor=colors.HexColor('#D5F5E3'), strokeColor=None))
+            
+            d.add(Line(cx-r, cy, cx+r, cy, strokeColor=colors.HexColor('#7F8C8D'), strokeWidth=2))
+            
+            val_limite = max(0, min(100, val_reloj))
+            angulo_rad = math.radians(180 - (val_limite * 1.8))
+            
+            ax = cx + (r - 15) * math.cos(angulo_rad)
+            ay = cy + (r - 15) * math.sin(angulo_rad)
+            
+            d.add(Line(cx, cy, ax, ay, strokeColor=colors.HexColor('#2C3E50'), strokeWidth=4))
+            d.add(Circle(cx, cy, 8, fillColor=colors.HexColor('#34495E'), strokeColor=colors.white, strokeWidth=1))
+            
+            d.add(String(cx - r - 15, cy + 5, "0%", fontName="Helvetica-Bold", fontSize=9, fillColor=colors.HexColor('#7F8C8D')))
+            d.add(String(cx - 10, cy + r + 5, "50%", fontName="Helvetica-Bold", fontSize=9, fillColor=colors.HexColor('#7F8C8D')))
+            d.add(String(cx + r + 5, cy + 5, "100%", fontName="Helvetica-Bold", fontSize=9, fillColor=colors.HexColor('#7F8C8D')))
+            
+            d.add(String(cx - 25, cy + 25, f"{val_limite}%", fontName="Helvetica-Bold", fontSize=18, fillColor=colors.HexColor('#1E8449')))
+            story.append(d)
             
             doc.build(story)
             buffer.seek(0)
             return buffer.getvalue()
         
         # --- BOTÓN DE DESCARGA EN INTERFAZ ---
-        pdf_data = generar_pdf_historico(df_visual_tabla)
+        pdf_data = generar_pdf_historico_premium(df_visual_tabla, promedio_asist_val)
         
         st.download_button(
-            label="📄 Descargar Reporte Histórico en PDF",
+            label="📄 Descargar Reporte Premium Planta Metales en PDF",
             data=pdf_data,
-            file_name="Reporte_Historico_FO-RHU-23.pdf",
+            file_name="Reporte_Historico_Metales_Sigrama.pdf",
             mime="application/pdf"
         )
-        
-        # Gráfica de líneas interactiva
-        st.markdown("### 📈 Tendencia de Indicadores")
-        df_grafica = df_hist.copy()
-        df_grafica['Asistencia'] = df_grafica['Asifica'] = df_grafica['Asistencia'].str.rstrip('%').astype(float)
-        df_grafica['Puntualidad'] = df_grafica['Puntualidad'].str.rstrip('%').astype(float)
-        df_grafica['Tasa de Ausencia'] = df_grafica['Tasa de Ausencia'].str.rstrip('%').astype(float)
-        st.line_chart(df_grafica.set_index("Semana")[["Asistencia", "Puntualidad", "Tasa de Ausencia"]])
     else:
         st.info("La tabla histórica está vacía. Guarda una semana para ver el formato estilo Excel.")
+
+
+
