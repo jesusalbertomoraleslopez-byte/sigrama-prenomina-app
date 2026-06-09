@@ -1,6 +1,7 @@
 # ==============================================================================
 # SECCIÓN 1 - CONFIGURACIÓN DE PLATAFORMA E IMPORTACIONES
 # ==============================================================================
+
 import streamlit as st
 import pandas as pd
 import glob
