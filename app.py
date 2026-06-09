@@ -265,23 +265,39 @@ AREAS_LISTA_RAW = [
 with tab_areas:
     st.subheader("📝 Panel de Control de Plantilla y Estructura Organizacional")
     df_db = cargar_catalogo_personal()
+
     
-    df_asistencias_raw = procesar_base_asistencias(ruta_carpeta)
-    cambio_detectado = False
-    
+    # ==============================================================================
+    # SECCIÓN 6 - SOLUCIÓN CORREGIDA PARA NO BORRAR ÁREAS
+    # ==============================================================================
     if df_asistencias_raw is not None:
         empleados_nuevos = df_asistencias_raw[['#Empleado', 'Nombre del Empleado']].drop_duplicates()
         nuevos_registros = []
+        
         for _, emp in empleados_nuevos.iterrows():
             id_e = str(emp['#Empleado']).strip()
             nom_e = str(emp['Nombre del Empleado']).strip()
-            if id_e not in df_db['id_empleado'].values and id_e != 'nan' and id_e != '':
-                nuevos_registros.append({"id_empleado": id_e, "nombre": nom_e, "area": "⚪ Sin Asignar"})
-                cambio_detectado = True
-        if cambio_detectado:
-            df_db = pd.concat([df_db, pd.DataFrame(nuevos_registros)], ignore_index=True)
-            df_db.to_excel(ARCHIVO_PERSONAL, index=False)
             
+            if id_e != 'nan' and id_e != '':
+                # Si el empleado YA existe en la base de datos
+                if id_e in df_db['id_empleado'].values:
+                    # Actualizamos su nombre por si cambió, pero DEJAMOS SU ÁREA INTACTA
+                    df_db.loc[df_db['id_empleado'] == id_e, 'nombre'] = nom_e
+                else:
+                    # SOLO si es un empleado totalmente nuevo, lo agregamos sin asignar
+                    nuevos_registros.append({"id_empleado": id_e, "nombre": nom_e, "area": "⚪ Sin Asignar"})
+                    cambio_detectado = True
+    
+        if cambio_detectado and nuevos_registros:
+            df_db = pd.concat([df_db, pd.DataFrame(nuevos_registros)], ignore_index=True)
+        
+        # Guardamos de forma local para que persista durante el rerun de la sesión
+        df_db.to_excel(ARCHIVO_PERSONAL, index=False)
+
+
+
+
+    
     df_editor = st.data_editor(df_db, column_config={"id_empleado": st.column_config.TextColumn("ID Empleado", required=True), "nombre": st.column_config.TextColumn("Nombre Completo del Colaborador", required=True), "area": st.column_config.SelectboxColumn("Área Operativa Asignada", options=AREAS_LISTA_RAW, required=True)}, num_rows="dynamic", use_container_width=True, key="maestro_personal_editor")
     
     st.markdown("---")
