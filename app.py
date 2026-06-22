@@ -900,164 +900,164 @@ with tab_reportes:
                     
                 st.write("---")
                 st.subheader("🏭 Desglose Estructurado y Matrices por Área Operativa")
-# ==============================================================================
-# SECCIÓN 8 (PARTE 1) - CONFIGURACIÓN DE FORMATOS DE EXCEL
-# ==============================================================================
-buffer_excel = io.BytesIO()
-with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
-    workbook = writer.book
+                # ==============================================================================
+                # SECCIÓN 8 (PARTE 1) - CONFIGURACIÓN DE FORMATOS DE EXCEL
+                # ==============================================================================
+                buffer_excel = io.BytesIO()
+                with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
+                    workbook = writer.book
     
-    # Formatos de Celda Base
-    fmt_header = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 10, 'bg_color': '#FFFFFF', 'color': '#000000', 'border': 1, 'border_color': '#FF0000', 'align': 'center', 'valign': 'vcenter'})
-    fmt_data = workbook.add_format({'font_name': 'Arial', 'font_size': 10, 'border': 1, 'border_color': '#FF0000', 'align': 'left', 'valign': 'vcenter'})
-    fmt_data_center = workbook.add_format({'font_name': 'Arial', 'font_size': 10, 'border': 1, 'border_color': '#FF0000', 'align': 'center', 'valign': 'vcenter'})
+                    # Formatos de Celda Base
+                    fmt_header = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 10, 'bg_color': '#FFFFFF', 'color': '#000000', 'border': 1, 'border_color': '#FF0000', 'align': 'center', 'valign': 'vcenter'})
+                    fmt_data = workbook.add_format({'font_name': 'Arial', 'font_size': 10, 'border': 1, 'border_color': '#FF0000', 'align': 'left', 'valign': 'vcenter'})
+                    fmt_data_center = workbook.add_format({'font_name': 'Arial', 'font_size': 10, 'border': 1, 'border_color': '#FF0000', 'align': 'center', 'valign': 'vcenter'})
     
-    # Formatos con Código de Color para Incidencias
-    fmt_celda_a = workbook.add_format({'bg_color': '#d4edda', 'color': '#155724', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
-    fmt_celda_f = workbook.add_format({'bg_color': '#f8d7da', 'color': '#721c24', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
-    fmt_celda_sd = workbook.add_format({'bg_color': '#fff3cd', 'color': '#856404', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
+                    # Formatos con Código de Color para Incidencias
+                    fmt_celda_a = workbook.add_format({'bg_color': '#d4edda', 'color': '#155724', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
+                    fmt_celda_f = workbook.add_format({'bg_color': '#f8d7da', 'color': '#721c24', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
+                    fmt_celda_sd = workbook.add_format({'bg_color': '#fff3cd', 'color': '#856404', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
     
-    # Formatos de Encabezados Oficiales e Identidad Documental
-    fmt_meta_title = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 16, 'align': 'center'})
-    fmt_meta_code = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 11, 'color': '#FF0000'})
-    fmt_meta_sub = workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'color': '#555555'})
-    fmt_fecha_titulo = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 11})
+                    # Formatos de Encabezados Oficiales e Identidad Documental
+                    fmt_meta_title = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 16, 'align': 'center'})
+                    fmt_meta_code = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 11, 'color': '#FF0000'})
+                    fmt_meta_sub = workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'color': '#555555'})
+                    fmt_fecha_titulo = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 11})
     
-    cols_mostrar = ['#Empleado', 'Nombre del Empleado'] + columnas_dias_str + ['PUNTUALIDAD', 'ASISTENCIA', 'DESEMPEÑO']
+                    cols_mostrar = ['#Empleado', 'Nombre del Empleado'] + columnas_dias_str + ['PUNTUALIDAD', 'ASISTENCIA', 'DESEMPEÑO']
     
-    # Preparación de hojas: Consolidado General + Una hoja independiente por cada área operativa
-    lista_hojas_excel = [('CONSOLIDADO', matriz_final)] + [
-        (ar.replace("👑 ", "").replace("⚙️ ", "").replace("🔍 ", "").replace("📐 ", "").replace("✂️ ", "").replace("🎨 ", "").replace("📦 ", "").replace("⚪ ", "")[:31], 
-         matriz_final[matriz_final['area'] == ar]) for ar in AREAS_LISTA_RAW
-    ]
-# ==============================================================================
-# SECCIÓN 8 (PARTE 2) - ESCRITURA DINÁMICA DE REGISTROS POR HOJA
-# ==============================================================================
-    for nombre_hoja, df_hoja in lista_hojas_excel:
-        if df_hoja.empty: 
-            continue
+                    # Preparación de hojas: Consolidado General + Una hoja independiente por cada área operativa
+                    lista_hojas_excel = [('CONSOLIDADO', matriz_final)] + [
+                        (ar.replace("👑 ", "").replace("⚙️ ", "").replace("🔍 ", "").replace("📐 ", "").replace("✂️ ", "").replace("🎨 ", "").replace("📦 ", "").replace("⚪ ", "")[:31], 
+                         matriz_final[matriz_final['area'] == ar]) for ar in AREAS_LISTA_RAW
+                    ]
+                # ==============================================================================
+                # SECCIÓN 8 (PARTE 2) - ESCRITURA DINÁMICA DE REGISTROS POR HOJA
+                # ==============================================================================
+                    for nombre_hoja, df_hoja in lista_hojas_excel:
+                        if df_hoja.empty: 
+                            continue
             
-        fila_inicio_datos = 4
-        df_hoja[cols_mostrar].to_excel(writer, sheet_name=nombre_hoja, index=False, startrow=3)
-        ws = writer.sheets[nombre_hoja]
+                        fila_inicio_datos = 4
+                        df_hoja[cols_mostrar].to_excel(writer, sheet_name=nombre_hoja, index=False, startrow=3)
+                        ws = writer.sheets[nombre_hoja]
         
-        # Dimensionamiento de Filas y Columnas Oficiales
-        ws.set_row(0, 18); ws.set_row(1, 15); ws.set_row(2, 15); ws.set_row(3, 22)
-        ws.set_column('A:A', 12); ws.set_column('B:B', 35); ws.set_column('C:R', 4); ws.set_column('S:V', 14)
+                        # Dimensionamiento de Filas y Columnas Oficiales
+                        ws.set_row(0, 18); ws.set_row(1, 15); ws.set_row(2, 15); ws.set_row(3, 22)
+                        ws.set_column('A:A', 12); ws.set_column('B:B', 35); ws.set_column('C:R', 4); ws.set_column('S:V', 14)
         
-        # Encabezado del Formato Oficial de Calidad
-        ws.write('A1', 'FO-RHU-23', fmt_meta_code)
-        ws.write('A2', 'Revisión 01', fmt_meta_sub)
-        ws.write('A3', '25 de mayo 2020', fmt_meta_sub)
-        ws.merge_range('D1:N2', 'PRE-NÓMINA', fmt_meta_title)
-        ws.write('A4', f'PRENÓMINA AL {fecha_fin.strftime("%d DE %B DE %Y").upper()}', fmt_fecha_titulo)
+                        # Encabezado del Formato Oficial de Calidad
+                        ws.write('A1', 'FO-RHU-23', fmt_meta_code)
+                        ws.write('A2', 'Revisión 01', fmt_meta_sub)
+                        ws.write('A3', '25 de mayo 2020', fmt_meta_sub)
+                        ws.merge_range('D1:N2', 'PRE-NÓMINA', fmt_meta_title)
+                        ws.write('A4', f'PRENÓMINA AL {fecha_fin.strftime("%d DE %B DE %Y").upper()}', fmt_fecha_titulo)
         
-        encabezados_oficiales = ["#Empleado", "Nombre del Empleado"] + columnas_dias_str + ["TE", "PUNTUALIDAD", "ASISTENCIA", "DESEMPEÑO"]
-        for col_num, header_text in enumerate(encabezados_oficiales): 
-            ws.write(fila_inicio_datos, col_num, header_text, fmt_header)
+                        encabezados_oficiales = ["#Empleado", "Nombre del Empleado"] + columnas_dias_str + ["TE", "PUNTUALIDAD", "ASISTENCIA", "DESEMPEÑO"]
+                        for col_num, header_text in enumerate(encabezados_oficiales): 
+                            ws.write(fila_inicio_datos, col_num, header_text, fmt_header)
             
-        # Volcado con Estilos Condicionales aplicados al Libro
-        for idx_fila in range(len(df_hoja)):
-            fila_excel = fila_inicio_datos + 1 + idx_fila
-            ws.set_row(fila_excel, 20)
-            ws.write(fila_excel, 0, df_hoja.iloc[idx_fila]['#Empleado'], fmt_data_center)
-            ws.write(fila_excel, 1, df_hoja.iloc[idx_fila]['Nombre del Empleado'], fmt_data)
+                        # Volcado con Estilos Condicionales aplicados al Libro
+                        for idx_fila in range(len(df_hoja)):
+                            fila_excel = fila_inicio_datos + 1 + idx_fila
+                            ws.set_row(fila_excel, 20)
+                            ws.write(fila_excel, 0, df_hoja.iloc[idx_fila]['#Empleado'], fmt_data_center)
+                            ws.write(fila_excel, 1, df_hoja.iloc[idx_fila]['Nombre del Empleado'], fmt_data)
             
-            for idx_dia, dia_str in enumerate(columnas_dias_str):
-                col_excel = 2 + idx_dia
-                valor_dia = df_hoja.iloc[idx_fila][dia_str]
-                if valor_dia in ["A", "R"]: 
-                    ws.write(fila_excel, col_excel, valor_dia, fmt_celda_a)
-                elif valor_dia == "F": 
-                    ws.write(fila_excel, col_excel, valor_dia, fmt_celda_f)
-                elif valor_dia in ["S", "D"]: 
-                    ws.write(fila_excel, col_excel, valor_dia, fmt_celda_sd)
-                else: 
-                    ws.write(fila_excel, col_excel, valor_dia, fmt_data_center)
+                            for idx_dia, dia_str in enumerate(columnas_dias_str):
+                                col_excel = 2 + idx_dia
+                                valor_dia = df_hoja.iloc[idx_fila][dia_str]
+                                if valor_dia in ["A", "R"]: 
+                                    ws.write(fila_excel, col_excel, valor_dia, fmt_celda_a)
+                                elif valor_dia == "F": 
+                                    ws.write(fila_excel, col_excel, valor_dia, fmt_celda_f)
+                                elif valor_dia in ["S", "D"]: 
+                                    ws.write(fila_excel, col_excel, valor_dia, fmt_celda_sd)
+                                else: 
+                                    ws.write(fila_excel, col_excel, valor_dia, fmt_data_center)
                     
-            ws.write(fila_excel, 2 + len(columnas_dias_str), "", fmt_data_center) # Celda para "Tiempo Extra (TE)"
-            ws.write(fila_excel, 3 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['PUNTUALIDAD'], fmt_data_center)
-            ws.write(fila_excel, 4 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['ASISTENCIA'], fmt_data_center)
-            ws.write(fila_excel, 5 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['DESEMPEÑO'], fmt_data_center)
+                            ws.write(fila_excel, 2 + len(columnas_dias_str), "", fmt_data_center) # Celda para "Tiempo Extra (TE)"
+                            ws.write(fila_excel, 3 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['PUNTUALIDAD'], fmt_data_center)
+                            ws.write(fila_excel, 4 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['ASISTENCIA'], fmt_data_center)
+                            ws.write(fila_excel, 5 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['DESEMPEÑO'], fmt_data_center)
             
-# ==============================================================================
-# SECCIÓN 8 (PARTE 3) - RECUADROS TOTALMENTE SEPARADOS SIN COLISIÓN
-# ==============================================================================
-            # Dejamos 2 renglones de espacio después del último empleado
-            fila_obs = fila_inicio_datos + len(df_hoja) + 2
+                # ==============================================================================
+                # SECCIÓN 8 (PARTE 3) - RECUADROS TOTALMENTE SEPARADOS SIN COLISIÓN
+                # ==============================================================================
+                            # Dejamos 2 renglones de espacio después del último empleado
+                            fila_obs = fila_inicio_datos + len(df_hoja) + 2
             
-            # NOTA: Escribimos en texto plano en la Columna B (columna 1) sin combinar celdas
-            # Esto evita al 100% que XlsxWriter arroje OverlappingRange
-            ws.write(fila_obs, 1, " OBSERVACIONES: ", workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 9, 'color': '#FF0000'}))
+                            # NOTA: Escribimos en texto plano en la Columna B (columna 1) sin combinar celdas
+                            # Esto evita al 100% que XlsxWriter arroje OverlappingRange
+                            ws.write(fila_obs, 1, " OBSERVACIONES: ", workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 9, 'color': '#FF0000'}))
             
-            # Glosario Reglamentario de Incidencias en renglones independientes en la columna B
-            fila_firmas = fila_obs + 4
-            ws.write(fila_firmas, 1, "ASISTENCIA= A | TIEMPO EXTRA= TE | TRABAJO FORANEO= TF | PERMISO= P", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
-            ws.write(fila_firmas + 1, 1, "FALTA= F | VACACIONES= V | INCAPACIDAD= I | SÁBADO= S | DOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
-            ws.write(fila_firmas + 2, 1, "NO LABORABLE CONVENIO= NLC | DÍA FESTIVO LABORADO= DFL | DIA DE DESCANSO LABORADO= DDL", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+                            # Glosario Reglamentario de Incidencias en renglones independientes en la columna B
+                            fila_firmas = fila_obs + 4
+                            ws.write(fila_firmas, 1, "ASISTENCIA= A | TIEMPO EXTRA= TE | TRABAJO FORANEO= TF | PERMISO= P", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+                            ws.write(fila_firmas + 1, 1, "FALTA= F | VACACIONES= V | INCAPACIDAD= I | SÁBADO= S | DOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+                            ws.write(fila_firmas + 2, 1, "NO LABORABLE CONVENIO= NLC | DÍA FESTIVO LABORADO= DFL | DIA DE DESCANSO LABORADO= DDL", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
             
-            # Formatos limpios para las Firmas Autorizadas
-            fmt_linea_firma = workbook.add_format({'top': 1, 'top_color': '#000000', 'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
-            fmt_texto_firma = workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
+                            # Formatos limpios para las Firmas Autorizadas
+                            fmt_linea_firma = workbook.add_format({'top': 1, 'top_color': '#000000', 'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
+                            fmt_texto_firma = workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
             
-            # Espacio para Firmas Oficiales de forma segura
-            # Firma Director General colocada limpiamente en la columna B (Nombre)
-            ws.write_blank(fila_firmas + 6, 1, fmt_linea_firma)
-            ws.write(fila_firmas + 7, 1, "FIRMA DIRECTOR GENERAL", fmt_texto_firma)
+                            # Espacio para Firmas Oficiales de forma segura
+                            # Firma Director General colocada limpiamente en la columna B (Nombre)
+                            ws.write_blank(fila_firmas + 6, 1, fmt_linea_firma)
+                            ws.write(fila_firmas + 7, 1, "FIRMA DIRECTOR GENERAL", fmt_texto_firma)
             
-            # Firma Gerente de Área colocada limpiamente en la columna S (Métricas)
-            ws.write_blank(fila_firmas + 6, 19, fmt_linea_firma)
-            ws.write(fila_firmas + 7, 19, "FIRMA GERENTE DE ÁREA", fmt_texto_firma)
+                            # Firma Gerente de Área colocada limpiamente en la columna S (Métricas)
+                            ws.write_blank(fila_firmas + 6, 19, fmt_linea_firma)
+                            ws.write(fila_firmas + 7, 19, "FIRMA GERENTE DE ÁREA", fmt_texto_firma)
             
-            # Pie de Página de Protección Intelectual de Industria Sigrama
-            ws.write(fila_firmas + 10, 0, "FO-SGC-02 PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
+                            # Pie de Página de Protección Intelectual de Industria Sigrama
+                            ws.write(fila_firmas + 10, 0, "FO-SGC-02 PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
 
-# Renderizado de Tablas Desglosadas por Área en la Interfaz de la Aplicación (UI)
-for ar in AREAS_LISTA_RAW:
-    df_area_actual = matriz_final[matriz_final['area'] == ar]
-    if not df_area_actual.empty:
-        conteo_flat_area = df_area_actual[columnas_dias_str].values.flatten()
-        c_a = list(conteo_flat_area).count("A")
-        c_r = list(conteo_flat_area).count("R")
-        c_f = list(conteo_flat_area).count("F")
-        area_total_dias = c_a + c_r + c_f
+                # Renderizado de Tablas Desglosadas por Área en la Interfaz de la Aplicación (UI)
+                for ar in AREAS_LISTA_RAW:
+                    df_area_actual = matriz_final[matriz_final['area'] == ar]
+                    if not df_area_actual.empty:
+                        conteo_flat_area = df_area_actual[columnas_dias_str].values.flatten()
+                        c_a = list(conteo_flat_area).count("A")
+                        c_r = list(conteo_flat_area).count("R")
+                        c_f = list(conteo_flat_area).count("F")
+                        area_total_dias = c_a + c_r + c_f
         
-        st.markdown(f"#### {ar}")
-        st.markdown(f"**Factor Asistencia de la Celda:** `{((area_total_dias - c_f) / area_total_dias * 100) if area_total_dias > 0 else 0:.1f}%` | **Puntualidad:** `{((c_a / (c_a + c_r) * 100) if (c_a + c_r) > 0 else 0):.1f}%`")
-        st.dataframe(df_area_actual[cols_mostrar].style.map(aplicar_colores_matriz, subset=columnas_dias_str), use_container_width=True)
+                        st.markdown(f"#### {ar}")
+                        st.markdown(f"**Factor Asistencia de la Celda:** `{((area_total_dias - c_f) / area_total_dias * 100) if area_total_dias > 0 else 0:.1f}%` | **Puntualidad:** `{((c_a / (c_a + c_r) * 100) if (c_a + c_r) > 0 else 0):.1f}%`")
+                        st.dataframe(df_area_actual[cols_mostrar].style.map(aplicar_colores_matriz, subset=columnas_dias_str), use_container_width=True)
 
-# Sección Final de Descarga de los Reportes divididos
-st.markdown("---")
-st.subheader("📥 Guardar Libro de Pre-Nómina por Áreas")
-st.download_button(
-    label="📄 Descargar Reporte FO-RHU-23 Dividido por Áreas (.xlsx)", 
-    data=buffer_excel.getvalue(), 
-    file_name=f"FO-RHU-23_PRENOMINA_POR_AREAS_{fecha_fin.strftime('%Y%m%d')}.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
-# Generar el archivo PDF en memoria
+                # Sección Final de Descarga de los Reportes divididos
+                st.markdown("---")
+                st.subheader("📥 Guardar Libro de Pre-Nómina por Áreas")
+                st.download_button(
+                    label="📄 Descargar Reporte FO-RHU-23 Dividido por Áreas (.xlsx)", 
+                    data=buffer_excel.getvalue(), 
+                    file_name=f"FO-RHU-23_PRENOMINA_POR_AREAS_{fecha_fin.strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+                # Generar el archivo PDF en memoria
 
 
-# 1. Ejecuta la función mejorada pasando las variables de control y horas
-pdf_data = generar_pdf_reporte(
-    fecha_inicio=fecha_inicio.strftime('%d/%m/%Y'),
-    fecha_fin=fecha_fin.strftime('%d/%m/%Y'),
-    hora_limite=hora_limite_input.strftime('%H:%M:%S'),
-    ga_pct=ga_pct,
-    gp_pct=gp_pct,
-    aus_pct=max(0, 100 - ga_pct),
-    matriz_final=matriz_final,
-    columnas_dias=columnas_dias_str,
-    areas_lista=AREAS_LISTA_RAW
-)
+                # 1. Ejecuta la función mejorada pasando las variables de control y horas
+                pdf_data = generar_pdf_reporte(
+                    fecha_inicio=fecha_inicio.strftime('%d/%m/%Y'),
+                    fecha_fin=fecha_fin.strftime('%d/%m/%Y'),
+                    hora_limite=hora_limite_input.strftime('%H:%M:%S'),
+                    ga_pct=ga_pct,
+                    gp_pct=gp_pct,
+                    aus_pct=max(0, 100 - ga_pct),
+                    matriz_final=matriz_final,
+                    columnas_dias=columnas_dias_str,
+                    areas_lista=AREAS_LISTA_RAW
+                )
 
-# 2. Botón interactivo en la pantalla principal
-st.download_button(
-    label="📄 Descargar Reporte FO-RHU-23 en PDF",
-    data=pdf_data,
-    file_name=f"FO-RHU-23_PRENOMINA_{fecha_fin.strftime('%Y%m%d')}.pdf",
-    mime="application/pdf"
-)
+                # 2. Botón interactivo en la pantalla principal
+                st.download_button(
+                    label="📄 Descargar Reporte FO-RHU-23 en PDF",
+                    data=pdf_data,
+                    file_name=f"FO-RHU-23_PRENOMINA_{fecha_fin.strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf"
+                )
 
 
 # ==============================================================================
