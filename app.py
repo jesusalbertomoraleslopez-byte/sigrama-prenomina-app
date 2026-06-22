@@ -486,10 +486,20 @@ if st.session_state["usuario_rol"] is not None:
     
     # Cargador de archivos en espera
     st.sidebar.subheader("📥 Cargar Nuevas Asistencias")
+    
+    # Mostrar mensaje de éxito si existe en el estado de sesión y limpiarlo
+    if "mensaje_exito" in st.session_state and st.session_state["mensaje_exito"]:
+        st.sidebar.success(st.session_state["mensaje_exito"])
+        st.session_state["mensaje_exito"] = None
+        
+    if "uploader_key_counter" not in st.session_state:
+        st.session_state["uploader_key_counter"] = 0
+        
     archivos_correo = st.sidebar.file_uploader(
         "Arrastra aquí tus archivos .xls del correo:", 
         type=["xls"], 
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        key=f"uploader_{st.session_state['uploader_key_counter']}"
     )
     
     if archivos_correo:
@@ -577,8 +587,11 @@ if st.session_state["usuario_rol"] is not None:
                     # Limpiamos el caché de Streamlit para que cargue los nuevos archivos xls
                     st.cache_data.clear()
                     
+                    # Incrementamos el contador para resetear la caja de archivos y guardamos el mensaje de éxito
+                    st.session_state["uploader_key_counter"] += 1
+                    st.session_state["mensaje_exito"] = f"✅ ¡{success_count} archivo(s) guardado(s) y sincronizado(s) en GitHub con éxito!"
+                    
                     status.update(label="✅ ¡Archivos e historial sincronizados!", state="complete")
-                    st.sidebar.success(f"🎉 {success_count} archivo(s) guardado(s) y procesado(s).")
                     st.rerun()
         
     # Selección de Hora Límite
