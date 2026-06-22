@@ -316,6 +316,138 @@ except:
 REPO_NAME = "jesusalbertomoraleslopez-byte/sigrama-prenomina-app"
 
 # ==============================================================================
+# SECCIÓN 1.5 - FUNCIONES AUXILIARES GLOBALES (DEFINICIÓN TEMPRANA)
+# ==============================================================================
+
+def limpiar_registro_hora(valor_celda):
+    if pd.isna(valor_celda) or str(valor_celda).strip() == "":
+        return None
+    texto_hora = str(valor_celda).strip()
+    if "1900" in texto_hora:
+        componentes = texto_hora.split(" ")
+        if len(componentes) >= 3:
+            texto_hora = componentes[1] + " " + " ".join(componentes[2:])
+    texto_hora = texto_hora.replace("a. m.", "AM").replace("p. m.", "PM").replace("a.m.", "AM").replace("p.m.", "PM")
+    try:
+        return pd.to_datetime(texto_hora, format="%I:%M:%S %p").time()
+    except:
+        try:
+            return pd.to_datetime(texto_hora, format="%H:%M:%S").time()
+        except:
+            return valor_celda.time() if hasattr(valor_celda, 'time') else None
+
+@st.cache_data
+def procesar_base_asistencias(carpeta):
+    ruta_busqueda = os.path.join(carpeta, "*.xls").replace("\\", "/")
+    archivos = glob.glob(ruta_busqueda)
+    if not archivos:
+        return None
+    listado = []
+    for r in archivos:
+        try:
+            df = pd.read_excel(r, skiprows=1, engine='xlrd')
+            df.columns = df.columns.str.strip().str.replace('\n', '').str.replace('\r', '')
+            df_limpio = pd.DataFrame()
+            df_limpio['#Empleado'] = df.iloc[:, 1]
+            df_limpio['Nombre del Empleado'] = df.iloc[:, 2]
+            col_fecha = [c for c in df.columns if 'Fecha' in str(c)]
+            col_hora = [c for c in df.columns if 'Hora Entrada' in str(c)]
+            col_nave = [c for c in df.columns if 'Nave Entrada' in str(c)]
+            df_limpio['Fecha_Raw'] = df[col_fecha] if col_fecha else df.iloc[:, 4]
+            df_limpio['Hora Entrada Raw'] = df[col_hora] if col_hora else df.iloc[:, 6]
+            df_limpio['Nave Entrada'] = df[col_nave] if col_nave else df.iloc[:, 7]
+            df_limpio = df_limpio.dropna(subset=['#Empleado'])
+            df_limpio['#Empleado'] = pd.to_numeric(df_limpio['#Empleado'], errors='coerce').dropna().astype(int).astype(str)
+            listado.append(df_limpio)
+        except:
+            continue
+    if listado:
+        df_master = pd.concat(listado, ignore_index=True)
+        df_master['Fecha_Clean'] = pd.to_datetime(df_master['Fecha_Raw'], errors='coerce', dayfirst=True).dt.date
+        return df_master
+    return None
+
+def recalcular_historico_completo(ruta_dir_asistencias, archivo_personal_path, limite_hora):
+    if not os.path.exists(archivo_personal_path):
+        return pd.DataFrame(columns=["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"])
+    try:
+        df_p = pd.read_excel(archivo_personal_path, dtype=str)
+        df_p['id_empleado'] = df_p['id_empleado'].str.strip()
+        employees = df_p['id_empleado'].dropna().tolist()
+    except:
+        return pd.DataFrame(columns=["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"])
+        
+    if not employees:
+        return pd.DataFrame(columns=["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"])
+        
+    df_m = procesar_base_asistencias(ruta_dir_asistencias)
+    if df_m is None or df_m.empty:
+        return pd.DataFrame(columns=["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"])
+        
+    df_m['util_hora'] = df_m['Hora Entrada Raw'].apply(limpiar_registro_hora)
+    
+    codigos = []
+    for _, fila in df_m.iterrows():
+        nave = str(fila.get('Nave Entrada', '')).strip().upper()
+        if "FALTA" in nave or pd.isna(fila['util_hora']): codigos.append("F")
+        elif fila['util_hora'] > limite_hora: codigos.append("R")
+        else: codigos.append("A")
+    df_m['Cod_Incidencia'] = codigos
+    
+    df_m['Fecha_Clean'] = pd.to_datetime(df_m['Fecha_Clean']).dt.date
+    unique_dates = sorted(df_m['Fecha_Clean'].dropna().unique())
+    
+    # Mapear la fecha del primer registro/ingreso de cada empleado en los archivos cargados
+    primeros_ingresos = df_m.groupby('#Empleado')['Fecha_Clean'].min().to_dict()
+    
+    semanas_agrupadas = {}
+    for d in unique_dates:
+        if d.weekday() <= 4: # Lunes a Viernes
+            year, week_num, weekday = d.isocalendar()
+            week_key = (year, week_num)
+            if week_key not in semanas_agrupadas:
+                semanas_agrupadas[week_key] = []
+            semanas_agrupadas[week_key].append(d)
+            
+    renglones = []
+    for k, v in sorted(semanas_agrupadas.items()):
+        total_a, total_r, total_f = 0, 0, 0
+        total_records = 0
+        for date_val in v:
+            df_day = df_m[df_m['Fecha_Clean'] == date_val]
+            day_map = dict(zip(df_day['#Empleado'].astype(str).str.strip(), df_day['Cod_Incidencia']))
+            for emp in employees:
+                # Solo se considera al colaborador a partir de su primer registro de asistencia en el sistema
+                first_date = primeros_ingresos.get(emp)
+                if first_date is not None and date_val >= first_date:
+                    total_records += 1
+                    status = day_map.get(emp, 'F')
+                    if status == 'A': total_a += 1
+                    elif status == 'R': total_r += 1
+                    elif status == 'F': total_f += 1
+                
+        conteo_asistencias = total_a + total_r
+        pct_asist = (conteo_asistencias / total_records * 100) if total_records > 0 else 0.0
+        pct_punt = (total_a / conteo_asistencias * 100) if conteo_asistencias > 0 else 0.0
+        pct_ausen = (total_f / total_records * 100) if total_records > 0 else 0.0
+        
+        v_sorted = sorted(v)
+        start_week = v_sorted[0]
+        end_week = v_sorted[-1]
+        
+        renglones.append({
+            "Semana": f"Semana {k[1]}",
+            "Fecha Inicio": start_week.strftime("%d-%b-%y").lower(),
+            "Fecha Fin": end_week.strftime("%d-%b-%y").lower(),
+            "Asistencia": f"{pct_asist:.2f}% ({conteo_asistencias} de {total_records})",
+            "Puntualidad": f"{pct_punt:.2f}% ({total_a} de {conteo_asistencias})",
+            "Tasa de Ausencia": f"{pct_ausen:.2f}% ({total_f} de {total_records})"
+        })
+        
+    return pd.DataFrame(renglones)
+
+
+# ==============================================================================
 # SECCIÓN 2 - PANEL LATERAL Y CARGADOR DE ARCHIVOS
 # ================================================# Variables por defecto para evitar errores al cargar la app sin sesión
 hora_limite_input = datetime.strptime("08:01:00", "%H:%M:%S").time()
@@ -485,22 +617,7 @@ st.markdown("<h2 style='text-align: center;'>👥 Portal de Capital Humano</h2>"
 st.markdown("---")
 
 
-def limpiar_registro_hora(valor_celda):
-    if pd.isna(valor_celda) or str(valor_celda).strip() == "":
-        return None
-    texto_hora = str(valor_celda).strip()
-    if "1900" in texto_hora:
-        componentes = texto_hora.split(" ")
-        if len(componentes) >= 3:
-            texto_hora = componentes[1] + " " + " ".join(componentes[2:])
-    texto_hora = texto_hora.replace("a. m.", "AM").replace("p. m.", "PM").replace("a.m.", "AM").replace("p.m.", "PM")
-    try:
-        return pd.to_datetime(texto_hora, format="%I:%M:%S %p").time()
-    except:
-        try:
-            return pd.to_datetime(texto_hora, format="%H:%M:%S").time()
-        except:
-            return valor_celda.time() if hasattr(valor_celda, 'time') else None
+
 
 def aplicar_colores_matriz(val):
     if val in ["A", "R"]:
@@ -527,36 +644,7 @@ def dibujar_reloj_donut(porcentaje, titulo, color_linea):
 # ==============================================================================
 # SECCIÓN 6 - LECTURA EXTRACTORA XLS Y PANEL DE CONTROL DE PERSONAL
 # ==============================================================================
-@st.cache_data
-def procesar_base_asistencias(carpeta):
-    ruta_busqueda = os.path.join(carpeta, "*.xls").replace("\\", "/")
-    archivos = glob.glob(ruta_busqueda)
-    if not archivos:
-        return None
-    listado = []
-    for r in archivos:
-        try:
-            df = pd.read_excel(r, skiprows=1, engine='xlrd')
-            df.columns = df.columns.str.strip().str.replace('\n', '').str.replace('\r', '')
-            df_limpio = pd.DataFrame()
-            df_limpio['#Empleado'] = df.iloc[:, 1]
-            df_limpio['Nombre del Empleado'] = df.iloc[:, 2]
-            col_fecha = [c for c in df.columns if 'Fecha' in str(c)]
-            col_hora = [c for c in df.columns if 'Hora Entrada' in str(c)]
-            col_nave = [c for c in df.columns if 'Nave Entrada' in str(c)]
-            df_limpio['Fecha_Raw'] = df[col_fecha] if col_fecha else df.iloc[:, 4]
-            df_limpio['Hora Entrada Raw'] = df[col_hora] if col_hora else df.iloc[:, 6]
-            df_limpio['Nave Entrada'] = df[col_nave] if col_nave else df.iloc[:, 7]
-            df_limpio = df_limpio.dropna(subset=['#Empleado'])
-            df_limpio['#Empleado'] = pd.to_numeric(df_limpio['#Empleado'], errors='coerce').dropna().astype(int).astype(str)
-            listado.append(df_limpio)
-        except:
-            continue
-    if listado:
-        df_master = pd.concat(listado, ignore_index=True)
-        df_master['Fecha_Clean'] = pd.to_datetime(df_master['Fecha_Raw'], errors='coerce', dayfirst=True).dt.date
-        return df_master
-    return None
+
 
 
 
@@ -1219,85 +1307,7 @@ with tab_reportes:
 # ==============================================================================
 
 
-# Función para calcular automáticamente todos los indicadores semanales
-def recalcular_historico_completo(ruta_dir_asistencias, archivo_personal_path, limite_hora):
-    if not os.path.exists(archivo_personal_path):
-        return pd.DataFrame(columns=["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"])
-    try:
-        df_p = pd.read_excel(archivo_personal_path, dtype=str)
-        df_p['id_empleado'] = df_p['id_empleado'].str.strip()
-        employees = df_p['id_empleado'].dropna().tolist()
-    except:
-        return pd.DataFrame(columns=["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"])
-        
-    if not employees:
-        return pd.DataFrame(columns=["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"])
-        
-    df_m = procesar_base_asistencias(ruta_dir_asistencias)
-    if df_m is None or df_m.empty:
-        return pd.DataFrame(columns=["Semana", "Fecha Inicio", "Fecha Fin", "Asistencia", "Puntualidad", "Tasa de Ausencia"])
-        
-    df_m['util_hora'] = df_m['Hora Entrada Raw'].apply(limpiar_registro_hora)
-    
-    codigos = []
-    for _, fila in df_m.iterrows():
-        nave = str(fila.get('Nave Entrada', '')).strip().upper()
-        if "FALTA" in nave or pd.isna(fila['util_hora']): codigos.append("F")
-        elif fila['util_hora'] > limite_hora: codigos.append("R")
-        else: codigos.append("A")
-    df_m['Cod_Incidencia'] = codigos
-    
-    df_m['Fecha_Clean'] = pd.to_datetime(df_m['Fecha_Clean']).dt.date
-    unique_dates = sorted(df_m['Fecha_Clean'].dropna().unique())
-    
-    # Mapear la fecha del primer registro/ingreso de cada empleado en los archivos cargados
-    primeros_ingresos = df_m.groupby('#Empleado')['Fecha_Clean'].min().to_dict()
-    
-    semanas_agrupadas = {}
-    for d in unique_dates:
-        if d.weekday() <= 4: # Lunes a Viernes
-            year, week_num, weekday = d.isocalendar()
-            week_key = (year, week_num)
-            if week_key not in semanas_agrupadas:
-                semanas_agrupadas[week_key] = []
-            semanas_agrupadas[week_key].append(d)
-            
-    renglones = []
-    for k, v in sorted(semanas_agrupadas.items()):
-        total_a, total_r, total_f = 0, 0, 0
-        total_records = 0
-        for date_val in v:
-            df_day = df_m[df_m['Fecha_Clean'] == date_val]
-            day_map = dict(zip(df_day['#Empleado'].astype(str).str.strip(), df_day['Cod_Incidencia']))
-            for emp in employees:
-                # Solo se considera al colaborador a partir de su primer registro de asistencia en el sistema
-                first_date = primeros_ingresos.get(emp)
-                if first_date is not None and date_val >= first_date:
-                    total_records += 1
-                    status = day_map.get(emp, 'F')
-                    if status == 'A': total_a += 1
-                    elif status == 'R': total_r += 1
-                    elif status == 'F': total_f += 1
-                
-        conteo_asistencias = total_a + total_r
-        pct_asist = (conteo_asistencias / total_records * 100) if total_records > 0 else 0.0
-        pct_punt = (total_a / conteo_asistencias * 100) if conteo_asistencias > 0 else 0.0
-        pct_ausen = (total_f / total_records * 100) if total_records > 0 else 0.0
-        
-        v_sorted = sorted(v)
-        start_week = v_sorted[0]
-        end_week = v_sorted[-1]
-        
-        renglones.append({
-            "Semana": f"Semana {k[1]}",
-            "Fecha Inicio": start_week.strftime("%d-%b-%y").lower(),
-            "Fecha Fin": end_week.strftime("%d-%b-%y").lower(),
-            "Asistencia": f"{pct_asist:.2f}% ({conteo_asistencias} de {total_records})",
-            "Puntualidad": f"{pct_punt:.2f}% ({total_a} de {conteo_asistencias})",
-            "Tasa de Ausencia": f"{pct_ausen:.2f}% ({total_f} de {total_records})"
-        })
-        
-    return pd.DataFrame(renglones)
+
 
 with tab_historico:
     st.subheader("📈 Histórico General por Semana")
