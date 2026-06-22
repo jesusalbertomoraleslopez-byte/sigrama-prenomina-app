@@ -20,12 +20,211 @@ from reportlab.lib import colors
 
 
 # Configuración estética de la interfaz del navegador
+logo_path = os.path.join(os.path.dirname(__file__), "LOGOTIPO COLOR (1).jfif")
 st.set_page_config(
     page_title="Industria Sigrama - Control de Pre-Nómina",
-    page_icon="🎨",
+    page_icon=logo_path if os.path.exists(logo_path) else "🏭",
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Inject Custom CSS for Premium Look & Feel and Corporate Branding
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&family=Questrial&display=swap');
+
+    /* Apply Montserrat to headers and Questrial to body, avoiding overriding icon fonts */
+    html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"], [data-testid="stHeader"] {
+        font-family: 'Questrial', sans-serif !important;
+    }
+    
+    /* Apply font to inputs and buttons specifically, excluding generic span and p to prevent icon font breakage */
+    input, select, textarea, button, label {
+        font-family: 'Questrial', sans-serif !important;
+    }
+    
+    /* Protect icon fonts from cascading overrides */
+    [class^="material-"], [class*=" material-"], .material-icons, .material-symbols-outlined, .material-symbols-rounded {
+        font-family: 'Material Symbols Rounded', 'Material Symbols Outlined', 'Material Icons' !important;
+    }
+    
+    h1, h2, h3, h4, h5, h6, .gotham-font {
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: 700 !important;
+        color: #111111 !important;
+    }
+    
+    /* Style all buttons to be red (Pantone 485 C) with white text */
+    div.stButton > button,
+    div.stDownloadButton > button,
+    div.stFormSubmitButton > button,
+    button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]),
+    button[data-testid="baseButton-primary"]:not([role="tab"]):not([data-baseweb="tab"]),
+    button[kind="secondary"]:not([role="tab"]):not([data-baseweb="tab"]),
+    button[kind="primary"]:not([role="tab"]):not([data-baseweb="tab"]) {
+        background-color: #EC2024 !important;
+        color: #FFFFFF !important;
+        border: 1px solid #EC2024 !important;
+        border-radius: 6px !important;
+        padding: 0.5rem 1rem !important;
+        font-weight: bold !important;
+        font-family: 'Questrial', sans-serif !important;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+    
+    div.stButton > button:hover,
+    div.stDownloadButton > button:hover,
+    div.stFormSubmitButton > button:hover,
+    button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
+    button[data-testid="baseButton-primary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
+    button[kind="secondary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
+    button[kind="primary"]:not([role="tab"]):not([data-baseweb="tab"]):hover {
+        background-color: #111111 !important;
+        border-color: #111111 !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 4px 12px rgba(236, 32, 36, 0.15) !important;
+        transform: translateY(-1px) !important;
+    }
+    
+    /* Style all dropdown selectbox inputs to use brand colors */
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] {
+        background-color: #FFFFFF !important;
+        border-radius: 6px !important;
+        border: 1px solid #D2D3D5 !important;
+        transition: border-color 0.2s ease !important;
+    }
+    
+    div[data-testid="stSelectbox"] div[data-baseweb="select"]:hover,
+    div[data-testid="stSelectbox"] div[data-baseweb="select"]:focus-within {
+        border-color: #EC2024 !important;
+    }
+    
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+        background-color: #FFFFFF !important;
+        color: #111111 !important;
+    }
+    
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] span {
+        color: #111111 !important;
+        font-weight: 500 !important;
+        font-family: 'Questrial', sans-serif !important;
+    }
+    
+    div[data-testid="stSelectbox"] div[data-baseweb="select"] svg {
+        fill: #111111 !important;
+    }
+    
+    /* Option items in the dropdown list */
+    div[role="listbox"] li,
+    ul[role="listbox"] li,
+    div[data-baseweb="popover"] li,
+    div[data-baseweb="menu"] li {
+        background-color: #FFFFFF !important;
+        color: #111111 !important;
+        font-family: 'Questrial', sans-serif !important;
+        transition: background-color 0.15s ease, color 0.15s ease !important;
+    }
+    
+    div[role="listbox"] li:hover,
+    ul[role="listbox"] li:hover,
+    div[data-baseweb="popover"] li:hover,
+    div[data-baseweb="menu"] li:hover {
+        background-color: #EC2024 !important;
+        color: #FFFFFF !important;
+    }
+    
+    /* Sidebar premium styling (Light Gray theme for Logo Legibility) */
+    [data-testid="stSidebar"] {
+        background-color: #F8F9FA !important;
+        border-right: 1px solid #E2E8F0 !important;
+    }
+    
+    [data-testid="stSidebar"] .stMarkdown,
+    [data-testid="stSidebar"] .stText,
+    [data-testid="stSidebar"] label,
+    [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] h4,
+    [data-testid="stSidebar"] h5,
+    [data-testid="stSidebar"] h6 {
+        color: #111111 !important;
+    }
+    
+    /* Force white text on sidebar buttons to override general sidebar text rules */
+    [data-testid="stSidebar"] button,
+    [data-testid="stSidebar"] button * {
+        color: #FFFFFF !important;
+    }
+    
+    /* Style tabs */
+    button[role="tab"] {
+        font-family: 'Montserrat', sans-serif !important;
+        font-weight: bold !important;
+        color: #111111 !important;
+    }
+    
+    button[role="tab"][aria-selected="true"] {
+        color: #EC2024 !important;
+        border-bottom-color: #EC2024 !important;
+    }
+    
+    /* Reset file uploader button styling to avoid overlap issues and fit corporate secondary styling */
+    [data-testid="stFileUploader"] button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]),
+    .stFileUploader button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]),
+    [data-testid="stFileUploader"] button,
+    .stFileUploader button {
+        background-color: #FFFFFF !important;
+        color: #111111 !important;
+        border: 1px solid #D2D3D5 !important;
+        border-radius: 6px !important;
+        padding: 0.375rem 0.75rem !important;
+        font-weight: 500 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+    
+    /* Ensure the text inside the file uploader button is dark and not overridden by sidebar rules */
+    [data-testid="stFileUploader"] button *,
+    .stFileUploader button * {
+        background-color: transparent !important;
+        color: #111111 !important;
+    }
+    
+    [data-testid="stFileUploader"] button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
+    .stFileUploader button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
+    [data-testid="stFileUploader"] button:hover,
+    .stFileUploader button:hover {
+        background-color: #F8F9FA !important;
+        border-color: #EC2024 !important;
+        color: #EC2024 !important;
+        box-shadow: none !important;
+        transform: none !important;
+    }
+    
+    [data-testid="stFileUploader"] button:hover *,
+    .stFileUploader button:hover * {
+        color: #EC2024 !important;
+    }
+    
+    /* Layout styling */
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 2rem;
+    }
+    
+    /* Corporate styling details */
+    .report-card {
+        background-color: #FFFFFF;
+        border: 1px solid #D2D3D5;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+</style>
+
 
 # ==============================================================================
 # ENCABEZADO INSTITUCIONAL - BANNER DE RECURSOS HUMANOS
@@ -65,6 +264,10 @@ REPO_NAME = "jesusalbertomoraleslopez-byte/sigrama-prenomina-app"
 # ==============================================================================
 # SECCIÓN 2 - PANEL LATERAL Y CARGADOR DE ARCHIVOS
 # ==============================================================================
+LOGO_PATH = os.path.join(os.path.dirname(__file__), "LOGOTIPO COLOR (1).jfif")
+if os.path.exists(LOGO_PATH):
+    st.sidebar.image(LOGO_PATH, use_container_width=True)
+
 st.sidebar.header("⚙️ Configuración del Periodo")
 
 # Cargador de archivos en espera
@@ -144,8 +347,25 @@ else:
     defecto_fin = siguiente_mes - timedelta(days=siguiente_mes.day)
 
 st.sidebar.subheader("📅 Fechas de la Quincena")
+st.sidebar.subheader("📅 Fechas de la Quincena")
 fecha_inicio = st.sidebar.date_input("Fecha Inicio:", value=defecto_inicio)
 fecha_fin = st.sidebar.date_input("Fecha Fin:", value=defecto_fin)
+
+# Sidebar Footer (Slogan & Contact details)
+st.sidebar.markdown("""
+<div style="text-align: center; padding-top: 1.5rem; border-top: 1px solid #E2E8F0; margin-top: 1rem;">
+    <p style="font-family: 'Questrial', sans-serif; font-size: 0.8rem; color: #666666; margin: 0;">
+        Industria Sigrama S.A. de C.V.
+    </p>
+    <p style="font-family: 'Montserrat', sans-serif; font-style: italic; font-weight: bold; color: #EC2024; font-size: 0.9rem; margin: 0.4rem 0 0.8rem 0;">
+        Ingeniería que da resultados!!
+    </p>
+    <hr style="border: 0; border-top: 2px solid #EC2024; width: 30px; margin: 0.5rem auto;">
+    <p style="font-size: 0.75rem; color: #666666; margin: 0.2rem 0; font-family: 'Questrial', sans-serif;">📧 <a href="mailto:sigrama@sigrama.com.mx" style="color: #EC2024; text-decoration: none;">sigrama@sigrama.com.mx</a></p>
+    <p style="font-size: 0.75rem; color: #666666; margin: 0.2rem 0; font-family: 'Questrial', sans-serif;">🌐 <a href="https://www.sigrama.com.mx" target="_blank" style="color: #EC2024; text-decoration: none;">www.sigrama.com.mx</a></p>
+    <p style="font-size: 0.75rem; color: #666666; margin: 0.2rem 0; font-family: 'Questrial', sans-serif;">📞 871 722 3132</p>
+</div>
+""", unsafe_allow_html=True)
 
 # --- FUNCIÓN DE AUTOGENERACIÓN Y CARGA DE EXCEL DE PERSONAL ---
 def cargar_catalogo_personal():
@@ -400,9 +620,9 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     
     styles = getSampleStyleSheet()
     style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], alignment=1, spaceAfter=5, fontName="Helvetica-Bold", fontSize=18)
-    style_sub = ParagraphStyle('Sub', parent=styles['Normal'], alignment=1, spaceAfter=15, fontSize=10, textColor=colors.HexColor("#555555"))
-    style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=12, spaceAfter=8, fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#333333"))
-    style_seccion = ParagraphStyle('Seccion', parent=styles['Heading3'], spaceBefore=10, spaceAfter=10, fontName="Helvetica-Bold", fontSize=11, textColor=colors.HexColor("#FF0000"))
+    style_sub = ParagraphStyle('Sub', parent=styles['Normal'], alignment=1, spaceAfter=15, fontSize=10, textColor=colors.HexColor("#111111"))
+    style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=12, spaceAfter=8, fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#111111"))
+    style_seccion = ParagraphStyle('Seccion', parent=styles['Heading3'], spaceBefore=10, spaceAfter=10, fontName="Helvetica-Bold", fontSize=11, textColor=colors.HexColor("#EC2024"))
     
     # Estilos internos para evitar textos encimados en las celdas
     style_celda_nombre = ParagraphStyle('CeldaNombre', parent=styles['Normal'], fontSize=8, fontName="Helvetica")
@@ -437,9 +657,9 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     anchos_relojes = [240, 240, 240]
     
     relojes_config = [
-        {"pct": ga_pct, "tit": "Asistencia Institucional", "col": colors.HexColor("#FFA500")},
-        {"pct": gp_pct, "tit": "Puntualidad Global", "col": colors.HexColor("#00A2E8")},
-        {"pct": aus_pct, "tit": "Tasa Ausentismo", "col": colors.HexColor("#FF0000")}
+        {"pct": ga_pct, "tit": "Asistencia Institucional", "col": colors.HexColor("#111111")},
+        {"pct": gp_pct, "tit": "Puntualidad Global", "col": colors.HexColor("#888888")},
+        {"pct": aus_pct, "tit": "Tasa Ausentismo", "col": colors.HexColor("#EC2024")}
     ]
     
     for r in relojes_config:
@@ -527,7 +747,7 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
         t_area = Table(tabla_datos, colWidths=ancho_columnas, repeatRows=1)
         
         estilos_celdas = [
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#FF0000")),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#EC2024")),
             ('ALIGN', (0,0), (0,-1), 'CENTER'),
             ('ALIGN', (1,0), (1,-1), 'LEFT'),
             ('ALIGN', (2,0), (-1,-1), 'CENTER'),
@@ -669,9 +889,9 @@ with tab_reportes:
                 gp_pct = ((global_a / (global_a + global_f + global_r) * 100) if (global_a + global_f + global_r) > 0 else 0)
                 
                 col_d1, col_d2, col_d3, col_d4 = st.columns(4)
-                with col_d1: st.plotly_chart(dibujar_reloj_donut(ga_pct, "Asistencia Institucional", "#ffa500"), use_container_width=False)
-                with col_d2: st.plotly_chart(dibujar_reloj_donut(gp_pct, "Puntualidad Global", "#00a2e8"), use_container_width=False)
-                with col_d3: st.plotly_chart(dibujar_reloj_donut(max(0, 100 - ga_pct), "Tasa Ausentismo", "#ff0000"), use_container_width=False)
+                with col_d1: st.plotly_chart(dibujar_reloj_donut(ga_pct, "Asistencia Institucional", "#111111"), use_container_width=False)
+                with col_d2: st.plotly_chart(dibujar_reloj_donut(gp_pct, "Puntualidad Global", "#888888"), use_container_width=False)
+                with col_d3: st.plotly_chart(dibujar_reloj_donut(max(0, 100 - ga_pct), "Tasa Ausentismo", "#EC2024"), use_container_width=False)
                 with col_d4:
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.metric("Total Colaboradores", f"{len(matriz_final)} Activos")
@@ -986,10 +1206,10 @@ with tab_historico:
             # B. TÍTULOS DE PLANTA METALES
             titulo_estilo = ParagraphStyle(
                 'TituloPlanta', parent=styles['Heading1'], fontSize=22, leading=26,
-                textColor=colors.HexColor('#2E4053'), alignment=1, spaceAfter=4
+                textColor=colors.HexColor('#EC2024'), alignment=1, spaceAfter=4
             )
             sub_estilo = ParagraphStyle(
-                'SubPlanta', fontSize=11, textColor=colors.HexColor('#566573'),
+                'SubPlanta', fontSize=11, textColor=colors.HexColor('#111111'),
                 alignment=1, spaceAfter=15
             )
             
@@ -1003,7 +1223,7 @@ with tab_historico:
             
             t = Table(tabla_datos, colWidths=[80, 85, 85, 95, 95, 110])
             estilo_tabla = TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2E4053')),
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#111111')),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.white),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                 ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
@@ -1028,9 +1248,9 @@ with tab_historico:
             d = Drawing(550, 110)
             
             relojes_config = [
-                {"cx": 90,  "val": v_asist, "titulo": "Asistencia", "color_txt": "#1E8449", "invertido": False},
-                {"cx": 275, "val": v_punt,  "titulo": "Puntualidad", "color_txt": "#2471A3", "invertido": False},
-                {"cx": 460, "val": v_ausen, "titulo": "Ausentismo", "color_txt": "#922B21", "invertido": True}
+                {"cx": 90,  "val": v_asist, "titulo": "Asistencia", "color_txt": "#111111", "invertido": False},
+                {"cx": 275, "val": v_punt,  "titulo": "Puntualidad", "color_txt": "#888888", "invertido": False},
+                {"cx": 460, "val": v_ausen, "titulo": "Ausentismo", "color_txt": "#EC2024", "invertido": True}
             ]
             
             r = 75  
