@@ -20,212 +20,12 @@ from reportlab.lib import colors
 
 
 # Configuración estética de la interfaz del navegador
-logo_path = os.path.join(os.path.dirname(__file__), "LOGOTIPO COLOR (1).jfif")
 st.set_page_config(
     page_title="Industria Sigrama - Control de Pre-Nómina",
-    page_icon=logo_path if os.path.exists(logo_path) else "🏭",
+    page_icon="🎨",
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# Inject Custom CSS for Premium Look & Feel and Corporate Branding
-st.markdown("""
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&family=Questrial&display=swap');
-
-    /* Apply Montserrat to headers and Questrial to body, avoiding overriding icon fonts */
-    html, body, [data-testid="stAppViewContainer"], [data-testid="stSidebar"], [data-testid="stHeader"] {
-        font-family: 'Questrial', sans-serif !important;
-    }
-    
-    /* Apply font to inputs and buttons specifically, excluding generic span and p to prevent icon font breakage */
-    input, select, textarea, button, label {
-        font-family: 'Questrial', sans-serif !important;
-    }
-    
-    /* Protect icon fonts from cascading overrides */
-    [class^="material-"], [class*=" material-"], .material-icons, .material-symbols-outlined, .material-symbols-rounded {
-        font-family: 'Material Symbols Rounded', 'Material Symbols Outlined', 'Material Icons' !important;
-    }
-    
-    h1, h2, h3, h4, h5, h6, .gotham-font {
-        font-family: 'Montserrat', sans-serif !important;
-        font-weight: 700 !important;
-        color: #111111 !important;
-    }
-    
-    /* Style all buttons to be red (Pantone 485 C) with white text */
-    div.stButton > button,
-    div.stDownloadButton > button,
-    div.stFormSubmitButton > button,
-    button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]),
-    button[data-testid="baseButton-primary"]:not([role="tab"]):not([data-baseweb="tab"]),
-    button[kind="secondary"]:not([role="tab"]):not([data-baseweb="tab"]),
-    button[kind="primary"]:not([role="tab"]):not([data-baseweb="tab"]) {
-        background-color: #EC2024 !important;
-        color: #FFFFFF !important;
-        border: 1px solid #EC2024 !important;
-        border-radius: 6px !important;
-        padding: 0.5rem 1rem !important;
-        font-weight: bold !important;
-        font-family: 'Questrial', sans-serif !important;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    }
-    
-    div.stButton > button:hover,
-    div.stDownloadButton > button:hover,
-    div.stFormSubmitButton > button:hover,
-    button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
-    button[data-testid="baseButton-primary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
-    button[kind="secondary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
-    button[kind="primary"]:not([role="tab"]):not([data-baseweb="tab"]):hover {
-        background-color: #111111 !important;
-        border-color: #111111 !important;
-        color: #FFFFFF !important;
-        box-shadow: 0 4px 12px rgba(236, 32, 36, 0.15) !important;
-        transform: translateY(-1px) !important;
-    }
-    
-    /* Style all dropdown selectbox inputs to use brand colors */
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] {
-        background-color: #FFFFFF !important;
-        border-radius: 6px !important;
-        border: 1px solid #D2D3D5 !important;
-        transition: border-color 0.2s ease !important;
-    }
-    
-    div[data-testid="stSelectbox"] div[data-baseweb="select"]:hover,
-    div[data-testid="stSelectbox"] div[data-baseweb="select"]:focus-within {
-        border-color: #EC2024 !important;
-    }
-    
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] > div {
-        background-color: #FFFFFF !important;
-        color: #111111 !important;
-    }
-    
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] span {
-        color: #111111 !important;
-        font-weight: 500 !important;
-        font-family: 'Questrial', sans-serif !important;
-    }
-    
-    div[data-testid="stSelectbox"] div[data-baseweb="select"] svg {
-        fill: #111111 !important;
-    }
-    
-    /* Option items in the dropdown list */
-    div[role="listbox"] li,
-    ul[role="listbox"] li,
-    div[data-baseweb="popover"] li,
-    div[data-baseweb="menu"] li {
-        background-color: #FFFFFF !important;
-        color: #111111 !important;
-        font-family: 'Questrial', sans-serif !important;
-        transition: background-color 0.15s ease, color 0.15s ease !important;
-    }
-    
-    div[role="listbox"] li:hover,
-    ul[role="listbox"] li:hover,
-    div[data-baseweb="popover"] li:hover,
-    div[data-baseweb="menu"] li:hover {
-        background-color: #EC2024 !important;
-        color: #FFFFFF !important;
-    }
-    
-    /* Sidebar premium styling (Light Gray theme for Logo Legibility) */
-    [data-testid="stSidebar"] {
-        background-color: #F8F9FA !important;
-        border-right: 1px solid #E2E8F0 !important;
-    }
-    
-    [data-testid="stSidebar"] .stMarkdown,
-    [data-testid="stSidebar"] .stText,
-    [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] p,
-    [data-testid="stSidebar"] h1,
-    [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3,
-    [data-testid="stSidebar"] h4,
-    [data-testid="stSidebar"] h5,
-    [data-testid="stSidebar"] h6 {
-        color: #111111 !important;
-    }
-    
-    /* Force white text on sidebar buttons to override general sidebar text rules */
-    [data-testid="stSidebar"] button,
-    [data-testid="stSidebar"] button * {
-        color: #FFFFFF !important;
-    }
-    
-    /* Style tabs */
-    button[role="tab"] {
-        font-family: 'Montserrat', sans-serif !important;
-        font-weight: bold !important;
-        color: #111111 !important;
-    }
-    
-    button[role="tab"][aria-selected="true"] {
-        color: #EC2024 !important;
-        border-bottom-color: #EC2024 !important;
-    }
-    
-    /* Reset file uploader button styling to avoid overlap issues and fit corporate secondary styling */
-    [data-testid="stFileUploader"] button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]),
-    .stFileUploader button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]),
-    [data-testid="stFileUploader"] button,
-    .stFileUploader button {
-        background-color: #FFFFFF !important;
-        color: #111111 !important;
-        border: 1px solid #D2D3D5 !important;
-        border-radius: 6px !important;
-        padding: 0.375rem 0.75rem !important;
-        font-weight: 500 !important;
-        box-shadow: none !important;
-        transform: none !important;
-    }
-    
-    /* Ensure the text inside the file uploader button is dark and not overridden by sidebar rules */
-    [data-testid="stFileUploader"] button *,
-    .stFileUploader button * {
-        background-color: transparent !important;
-        color: #111111 !important;
-    }
-    
-    [data-testid="stFileUploader"] button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
-    .stFileUploader button[data-testid="baseButton-secondary"]:not([role="tab"]):not([data-baseweb="tab"]):hover,
-    [data-testid="stFileUploader"] button:hover,
-    .stFileUploader button:hover {
-        background-color: #F8F9FA !important;
-        border-color: #EC2024 !important;
-        color: #EC2024 !important;
-        box-shadow: none !important;
-        transform: none !important;
-    }
-    
-    [data-testid="stFileUploader"] button:hover *,
-    .stFileUploader button:hover * {
-        color: #EC2024 !important;
-    }
-    
-    /* Layout styling */
-    .block-container {
-        padding-top: 1rem;
-        padding-bottom: 2rem;
-    }
-    
-    /* Corporate styling details */
-    .report-card {
-        background-color: #FFFFFF;
-        border: 1px solid #D2D3D5;
-        border-radius: 8px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-</style>
-""", unsafe_allow_html=True)
-
 
 # ==============================================================================
 # ENCABEZADO INSTITUCIONAL - BANNER DE RECURSOS HUMANOS
@@ -265,10 +65,6 @@ REPO_NAME = "jesusalbertomoraleslopez-byte/sigrama-prenomina-app"
 # ==============================================================================
 # SECCIÓN 2 - PANEL LATERAL Y CARGADOR DE ARCHIVOS
 # ==============================================================================
-LOGO_PATH = os.path.join(os.path.dirname(__file__), "LOGOTIPO COLOR (1).jfif")
-if os.path.exists(LOGO_PATH):
-    st.sidebar.image(LOGO_PATH, use_container_width=True)
-
 st.sidebar.header("⚙️ Configuración del Periodo")
 
 # Cargador de archivos en espera
@@ -348,25 +144,8 @@ else:
     defecto_fin = siguiente_mes - timedelta(days=siguiente_mes.day)
 
 st.sidebar.subheader("📅 Fechas de la Quincena")
-st.sidebar.subheader("📅 Fechas de la Quincena")
 fecha_inicio = st.sidebar.date_input("Fecha Inicio:", value=defecto_inicio)
 fecha_fin = st.sidebar.date_input("Fecha Fin:", value=defecto_fin)
-
-# Sidebar Footer (Slogan & Contact details)
-st.sidebar.markdown("""
-<div style="text-align: center; padding-top: 1.5rem; border-top: 1px solid #E2E8F0; margin-top: 1rem;">
-    <p style="font-family: 'Questrial', sans-serif; font-size: 0.8rem; color: #666666; margin: 0;">
-        Industria Sigrama S.A. de C.V.
-    </p>
-    <p style="font-family: 'Montserrat', sans-serif; font-style: italic; font-weight: bold; color: #EC2024; font-size: 0.9rem; margin: 0.4rem 0 0.8rem 0;">
-        Ingeniería que da resultados!!
-    </p>
-    <hr style="border: 0; border-top: 2px solid #EC2024; width: 30px; margin: 0.5rem auto;">
-    <p style="font-size: 0.75rem; color: #666666; margin: 0.2rem 0; font-family: 'Questrial', sans-serif;">📧 <a href="mailto:sigrama@sigrama.com.mx" style="color: #EC2024; text-decoration: none;">sigrama@sigrama.com.mx</a></p>
-    <p style="font-size: 0.75rem; color: #666666; margin: 0.2rem 0; font-family: 'Questrial', sans-serif;">🌐 <a href="https://www.sigrama.com.mx" target="_blank" style="color: #EC2024; text-decoration: none;">www.sigrama.com.mx</a></p>
-    <p style="font-size: 0.75rem; color: #666666; margin: 0.2rem 0; font-family: 'Questrial', sans-serif;">📞 871 722 3132</p>
-</div>
-""", unsafe_allow_html=True)
 
 # --- FUNCIÓN DE AUTOGENERACIÓN Y CARGA DE EXCEL DE PERSONAL ---
 def cargar_catalogo_personal():
@@ -621,9 +400,9 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     
     styles = getSampleStyleSheet()
     style_titulo = ParagraphStyle('Titulo', parent=styles['Heading1'], alignment=1, spaceAfter=5, fontName="Helvetica-Bold", fontSize=18)
-    style_sub = ParagraphStyle('Sub', parent=styles['Normal'], alignment=1, spaceAfter=15, fontSize=10, textColor=colors.HexColor("#111111"))
-    style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=12, spaceAfter=8, fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#111111"))
-    style_seccion = ParagraphStyle('Seccion', parent=styles['Heading3'], spaceBefore=10, spaceAfter=10, fontName="Helvetica-Bold", fontSize=11, textColor=colors.HexColor("#EC2024"))
+    style_sub = ParagraphStyle('Sub', parent=styles['Normal'], alignment=1, spaceAfter=15, fontSize=10, textColor=colors.HexColor("#555555"))
+    style_area = ParagraphStyle('Area', parent=styles['Heading2'], spaceBefore=12, spaceAfter=8, fontName="Helvetica-Bold", fontSize=12, textColor=colors.HexColor("#333333"))
+    style_seccion = ParagraphStyle('Seccion', parent=styles['Heading3'], spaceBefore=10, spaceAfter=10, fontName="Helvetica-Bold", fontSize=11, textColor=colors.HexColor("#FF0000"))
     
     # Estilos internos para evitar textos encimados en las celdas
     style_celda_nombre = ParagraphStyle('CeldaNombre', parent=styles['Normal'], fontSize=8, fontName="Helvetica")
@@ -658,9 +437,9 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
     anchos_relojes = [240, 240, 240]
     
     relojes_config = [
-        {"pct": ga_pct, "tit": "Asistencia Institucional", "col": colors.HexColor("#111111")},
-        {"pct": gp_pct, "tit": "Puntualidad Global", "col": colors.HexColor("#888888")},
-        {"pct": aus_pct, "tit": "Tasa Ausentismo", "col": colors.HexColor("#EC2024")}
+        {"pct": ga_pct, "tit": "Asistencia Institucional", "col": colors.HexColor("#FFA500")},
+        {"pct": gp_pct, "tit": "Puntualidad Global", "col": colors.HexColor("#00A2E8")},
+        {"pct": aus_pct, "tit": "Tasa Ausentismo", "col": colors.HexColor("#FF0000")}
     ]
     
     for r in relojes_config:
@@ -748,7 +527,7 @@ def generar_pdf_reporte(fecha_inicio, fecha_fin, hora_limite, ga_pct, gp_pct, au
         t_area = Table(tabla_datos, colWidths=ancho_columnas, repeatRows=1)
         
         estilos_celdas = [
-            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#EC2024")),
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#FF0000")),
             ('ALIGN', (0,0), (0,-1), 'CENTER'),
             ('ALIGN', (1,0), (1,-1), 'LEFT'),
             ('ALIGN', (2,0), (-1,-1), 'CENTER'),
@@ -890,9 +669,9 @@ with tab_reportes:
                 gp_pct = ((global_a / (global_a + global_f + global_r) * 100) if (global_a + global_f + global_r) > 0 else 0)
                 
                 col_d1, col_d2, col_d3, col_d4 = st.columns(4)
-                with col_d1: st.plotly_chart(dibujar_reloj_donut(ga_pct, "Asistencia Institucional", "#111111"), use_container_width=False)
-                with col_d2: st.plotly_chart(dibujar_reloj_donut(gp_pct, "Puntualidad Global", "#888888"), use_container_width=False)
-                with col_d3: st.plotly_chart(dibujar_reloj_donut(max(0, 100 - ga_pct), "Tasa Ausentismo", "#EC2024"), use_container_width=False)
+                with col_d1: st.plotly_chart(dibujar_reloj_donut(ga_pct, "Asistencia Institucional", "#ffa500"), use_container_width=False)
+                with col_d2: st.plotly_chart(dibujar_reloj_donut(gp_pct, "Puntualidad Global", "#00a2e8"), use_container_width=False)
+                with col_d3: st.plotly_chart(dibujar_reloj_donut(max(0, 100 - ga_pct), "Tasa Ausentismo", "#ff0000"), use_container_width=False)
                 with col_d4:
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.metric("Total Colaboradores", f"{len(matriz_final)} Activos")
@@ -900,164 +679,164 @@ with tab_reportes:
                     
                 st.write("---")
                 st.subheader("🏭 Desglose Estructurado y Matrices por Área Operativa")
-                # ==============================================================================
-                # SECCIÓN 8 (PARTE 1) - CONFIGURACIÓN DE FORMATOS DE EXCEL
-                # ==============================================================================
-                buffer_excel = io.BytesIO()
-                with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
-                    workbook = writer.book
+# ==============================================================================
+# SECCIÓN 8 (PARTE 1) - CONFIGURACIÓN DE FORMATOS DE EXCEL
+# ==============================================================================
+buffer_excel = io.BytesIO()
+with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
+    workbook = writer.book
     
-                    # Formatos de Celda Base
-                    fmt_header = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 10, 'bg_color': '#FFFFFF', 'color': '#000000', 'border': 1, 'border_color': '#FF0000', 'align': 'center', 'valign': 'vcenter'})
-                    fmt_data = workbook.add_format({'font_name': 'Arial', 'font_size': 10, 'border': 1, 'border_color': '#FF0000', 'align': 'left', 'valign': 'vcenter'})
-                    fmt_data_center = workbook.add_format({'font_name': 'Arial', 'font_size': 10, 'border': 1, 'border_color': '#FF0000', 'align': 'center', 'valign': 'vcenter'})
+    # Formatos de Celda Base
+    fmt_header = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 10, 'bg_color': '#FFFFFF', 'color': '#000000', 'border': 1, 'border_color': '#FF0000', 'align': 'center', 'valign': 'vcenter'})
+    fmt_data = workbook.add_format({'font_name': 'Arial', 'font_size': 10, 'border': 1, 'border_color': '#FF0000', 'align': 'left', 'valign': 'vcenter'})
+    fmt_data_center = workbook.add_format({'font_name': 'Arial', 'font_size': 10, 'border': 1, 'border_color': '#FF0000', 'align': 'center', 'valign': 'vcenter'})
     
-                    # Formatos con Código de Color para Incidencias
-                    fmt_celda_a = workbook.add_format({'bg_color': '#d4edda', 'color': '#155724', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
-                    fmt_celda_f = workbook.add_format({'bg_color': '#f8d7da', 'color': '#721c24', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
-                    fmt_celda_sd = workbook.add_format({'bg_color': '#fff3cd', 'color': '#856404', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
+    # Formatos con Código de Color para Incidencias
+    fmt_celda_a = workbook.add_format({'bg_color': '#d4edda', 'color': '#155724', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
+    fmt_celda_f = workbook.add_format({'bg_color': '#f8d7da', 'color': '#721c24', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
+    fmt_celda_sd = workbook.add_format({'bg_color': '#fff3cd', 'color': '#856404', 'bold': True, 'border': 1, 'border_color': '#FF0000', 'align': 'center'})
     
-                    # Formatos de Encabezados Oficiales e Identidad Documental
-                    fmt_meta_title = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 16, 'align': 'center'})
-                    fmt_meta_code = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 11, 'color': '#FF0000'})
-                    fmt_meta_sub = workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'color': '#555555'})
-                    fmt_fecha_titulo = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 11})
+    # Formatos de Encabezados Oficiales e Identidad Documental
+    fmt_meta_title = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 16, 'align': 'center'})
+    fmt_meta_code = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 11, 'color': '#FF0000'})
+    fmt_meta_sub = workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'color': '#555555'})
+    fmt_fecha_titulo = workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 11})
     
-                    cols_mostrar = ['#Empleado', 'Nombre del Empleado'] + columnas_dias_str + ['PUNTUALIDAD', 'ASISTENCIA', 'DESEMPEÑO']
+    cols_mostrar = ['#Empleado', 'Nombre del Empleado'] + columnas_dias_str + ['PUNTUALIDAD', 'ASISTENCIA', 'DESEMPEÑO']
     
-                    # Preparación de hojas: Consolidado General + Una hoja independiente por cada área operativa
-                    lista_hojas_excel = [('CONSOLIDADO', matriz_final)] + [
-                        (ar.replace("👑 ", "").replace("⚙️ ", "").replace("🔍 ", "").replace("📐 ", "").replace("✂️ ", "").replace("🎨 ", "").replace("📦 ", "").replace("⚪ ", "")[:31], 
-                         matriz_final[matriz_final['area'] == ar]) for ar in AREAS_LISTA_RAW
-                    ]
-                # ==============================================================================
-                # SECCIÓN 8 (PARTE 2) - ESCRITURA DINÁMICA DE REGISTROS POR HOJA
-                # ==============================================================================
-                    for nombre_hoja, df_hoja in lista_hojas_excel:
-                        if df_hoja.empty: 
-                            continue
+    # Preparación de hojas: Consolidado General + Una hoja independiente por cada área operativa
+    lista_hojas_excel = [('CONSOLIDADO', matriz_final)] + [
+        (ar.replace("👑 ", "").replace("⚙️ ", "").replace("🔍 ", "").replace("📐 ", "").replace("✂️ ", "").replace("🎨 ", "").replace("📦 ", "").replace("⚪ ", "")[:31], 
+         matriz_final[matriz_final['area'] == ar]) for ar in AREAS_LISTA_RAW
+    ]
+# ==============================================================================
+# SECCIÓN 8 (PARTE 2) - ESCRITURA DINÁMICA DE REGISTROS POR HOJA
+# ==============================================================================
+    for nombre_hoja, df_hoja in lista_hojas_excel:
+        if df_hoja.empty: 
+            continue
             
-                        fila_inicio_datos = 4
-                        df_hoja[cols_mostrar].to_excel(writer, sheet_name=nombre_hoja, index=False, startrow=3)
-                        ws = writer.sheets[nombre_hoja]
+        fila_inicio_datos = 4
+        df_hoja[cols_mostrar].to_excel(writer, sheet_name=nombre_hoja, index=False, startrow=3)
+        ws = writer.sheets[nombre_hoja]
         
-                        # Dimensionamiento de Filas y Columnas Oficiales
-                        ws.set_row(0, 18); ws.set_row(1, 15); ws.set_row(2, 15); ws.set_row(3, 22)
-                        ws.set_column('A:A', 12); ws.set_column('B:B', 35); ws.set_column('C:R', 4); ws.set_column('S:V', 14)
+        # Dimensionamiento de Filas y Columnas Oficiales
+        ws.set_row(0, 18); ws.set_row(1, 15); ws.set_row(2, 15); ws.set_row(3, 22)
+        ws.set_column('A:A', 12); ws.set_column('B:B', 35); ws.set_column('C:R', 4); ws.set_column('S:V', 14)
         
-                        # Encabezado del Formato Oficial de Calidad
-                        ws.write('A1', 'FO-RHU-23', fmt_meta_code)
-                        ws.write('A2', 'Revisión 01', fmt_meta_sub)
-                        ws.write('A3', '25 de mayo 2020', fmt_meta_sub)
-                        ws.merge_range('D1:N2', 'PRE-NÓMINA', fmt_meta_title)
-                        ws.write('A4', f'PRENÓMINA AL {fecha_fin.strftime("%d DE %B DE %Y").upper()}', fmt_fecha_titulo)
+        # Encabezado del Formato Oficial de Calidad
+        ws.write('A1', 'FO-RHU-23', fmt_meta_code)
+        ws.write('A2', 'Revisión 01', fmt_meta_sub)
+        ws.write('A3', '25 de mayo 2020', fmt_meta_sub)
+        ws.merge_range('D1:N2', 'PRE-NÓMINA', fmt_meta_title)
+        ws.write('A4', f'PRENÓMINA AL {fecha_fin.strftime("%d DE %B DE %Y").upper()}', fmt_fecha_titulo)
         
-                        encabezados_oficiales = ["#Empleado", "Nombre del Empleado"] + columnas_dias_str + ["TE", "PUNTUALIDAD", "ASISTENCIA", "DESEMPEÑO"]
-                        for col_num, header_text in enumerate(encabezados_oficiales): 
-                            ws.write(fila_inicio_datos, col_num, header_text, fmt_header)
+        encabezados_oficiales = ["#Empleado", "Nombre del Empleado"] + columnas_dias_str + ["TE", "PUNTUALIDAD", "ASISTENCIA", "DESEMPEÑO"]
+        for col_num, header_text in enumerate(encabezados_oficiales): 
+            ws.write(fila_inicio_datos, col_num, header_text, fmt_header)
             
-                        # Volcado con Estilos Condicionales aplicados al Libro
-                        for idx_fila in range(len(df_hoja)):
-                            fila_excel = fila_inicio_datos + 1 + idx_fila
-                            ws.set_row(fila_excel, 20)
-                            ws.write(fila_excel, 0, df_hoja.iloc[idx_fila]['#Empleado'], fmt_data_center)
-                            ws.write(fila_excel, 1, df_hoja.iloc[idx_fila]['Nombre del Empleado'], fmt_data)
+        # Volcado con Estilos Condicionales aplicados al Libro
+        for idx_fila in range(len(df_hoja)):
+            fila_excel = fila_inicio_datos + 1 + idx_fila
+            ws.set_row(fila_excel, 20)
+            ws.write(fila_excel, 0, df_hoja.iloc[idx_fila]['#Empleado'], fmt_data_center)
+            ws.write(fila_excel, 1, df_hoja.iloc[idx_fila]['Nombre del Empleado'], fmt_data)
             
-                            for idx_dia, dia_str in enumerate(columnas_dias_str):
-                                col_excel = 2 + idx_dia
-                                valor_dia = df_hoja.iloc[idx_fila][dia_str]
-                                if valor_dia in ["A", "R"]: 
-                                    ws.write(fila_excel, col_excel, valor_dia, fmt_celda_a)
-                                elif valor_dia == "F": 
-                                    ws.write(fila_excel, col_excel, valor_dia, fmt_celda_f)
-                                elif valor_dia in ["S", "D"]: 
-                                    ws.write(fila_excel, col_excel, valor_dia, fmt_celda_sd)
-                                else: 
-                                    ws.write(fila_excel, col_excel, valor_dia, fmt_data_center)
+            for idx_dia, dia_str in enumerate(columnas_dias_str):
+                col_excel = 2 + idx_dia
+                valor_dia = df_hoja.iloc[idx_fila][dia_str]
+                if valor_dia in ["A", "R"]: 
+                    ws.write(fila_excel, col_excel, valor_dia, fmt_celda_a)
+                elif valor_dia == "F": 
+                    ws.write(fila_excel, col_excel, valor_dia, fmt_celda_f)
+                elif valor_dia in ["S", "D"]: 
+                    ws.write(fila_excel, col_excel, valor_dia, fmt_celda_sd)
+                else: 
+                    ws.write(fila_excel, col_excel, valor_dia, fmt_data_center)
                     
-                            ws.write(fila_excel, 2 + len(columnas_dias_str), "", fmt_data_center) # Celda para "Tiempo Extra (TE)"
-                            ws.write(fila_excel, 3 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['PUNTUALIDAD'], fmt_data_center)
-                            ws.write(fila_excel, 4 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['ASISTENCIA'], fmt_data_center)
-                            ws.write(fila_excel, 5 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['DESEMPEÑO'], fmt_data_center)
+            ws.write(fila_excel, 2 + len(columnas_dias_str), "", fmt_data_center) # Celda para "Tiempo Extra (TE)"
+            ws.write(fila_excel, 3 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['PUNTUALIDAD'], fmt_data_center)
+            ws.write(fila_excel, 4 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['ASISTENCIA'], fmt_data_center)
+            ws.write(fila_excel, 5 + len(columnas_dias_str), df_hoja.iloc[idx_fila]['DESEMPEÑO'], fmt_data_center)
             
-                # ==============================================================================
-                # SECCIÓN 8 (PARTE 3) - RECUADROS TOTALMENTE SEPARADOS SIN COLISIÓN
-                # ==============================================================================
-                            # Dejamos 2 renglones de espacio después del último empleado
-                            fila_obs = fila_inicio_datos + len(df_hoja) + 2
+# ==============================================================================
+# SECCIÓN 8 (PARTE 3) - RECUADROS TOTALMENTE SEPARADOS SIN COLISIÓN
+# ==============================================================================
+            # Dejamos 2 renglones de espacio después del último empleado
+            fila_obs = fila_inicio_datos + len(df_hoja) + 2
             
-                            # NOTA: Escribimos en texto plano en la Columna B (columna 1) sin combinar celdas
-                            # Esto evita al 100% que XlsxWriter arroje OverlappingRange
-                            ws.write(fila_obs, 1, " OBSERVACIONES: ", workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 9, 'color': '#FF0000'}))
+            # NOTA: Escribimos en texto plano en la Columna B (columna 1) sin combinar celdas
+            # Esto evita al 100% que XlsxWriter arroje OverlappingRange
+            ws.write(fila_obs, 1, " OBSERVACIONES: ", workbook.add_format({'bold': True, 'font_name': 'Arial', 'font_size': 9, 'color': '#FF0000'}))
             
-                            # Glosario Reglamentario de Incidencias en renglones independientes en la columna B
-                            fila_firmas = fila_obs + 4
-                            ws.write(fila_firmas, 1, "ASISTENCIA= A | TIEMPO EXTRA= TE | TRABAJO FORANEO= TF | PERMISO= P", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
-                            ws.write(fila_firmas + 1, 1, "FALTA= F | VACACIONES= V | INCAPACIDAD= I | SÁBADO= S | DOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
-                            ws.write(fila_firmas + 2, 1, "NO LABORABLE CONVENIO= NLC | DÍA FESTIVO LABORADO= DFL | DIA DE DESCANSO LABORADO= DDL", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+            # Glosario Reglamentario de Incidencias en renglones independientes en la columna B
+            fila_firmas = fila_obs + 4
+            ws.write(fila_firmas, 1, "ASISTENCIA= A | TIEMPO EXTRA= TE | TRABAJO FORANEO= TF | PERMISO= P", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+            ws.write(fila_firmas + 1, 1, "FALTA= F | VACACIONES= V | INCAPACIDAD= I | SÁBADO= S | DOMINGO= D", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
+            ws.write(fila_firmas + 2, 1, "NO LABORABLE CONVENIO= NLC | DÍA FESTIVO LABORADO= DFL | DIA DE DESCANSO LABORADO= DDL", workbook.add_format({'font_name': 'Arial', 'font_size': 9, 'bold': True}))
             
-                            # Formatos limpios para las Firmas Autorizadas
-                            fmt_linea_firma = workbook.add_format({'top': 1, 'top_color': '#000000', 'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
-                            fmt_texto_firma = workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
+            # Formatos limpios para las Firmas Autorizadas
+            fmt_linea_firma = workbook.add_format({'top': 1, 'top_color': '#000000', 'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
+            fmt_texto_firma = workbook.add_format({'align': 'center', 'font_name': 'Arial', 'font_size': 9, 'bold': True})
             
-                            # Espacio para Firmas Oficiales de forma segura
-                            # Firma Director General colocada limpiamente en la columna B (Nombre)
-                            ws.write_blank(fila_firmas + 6, 1, fmt_linea_firma)
-                            ws.write(fila_firmas + 7, 1, "FIRMA DIRECTOR GENERAL", fmt_texto_firma)
+            # Espacio para Firmas Oficiales de forma segura
+            # Firma Director General colocada limpiamente en la columna B (Nombre)
+            ws.write_blank(fila_firmas + 6, 1, fmt_linea_firma)
+            ws.write(fila_firmas + 7, 1, "FIRMA DIRECTOR GENERAL", fmt_texto_firma)
             
-                            # Firma Gerente de Área colocada limpiamente en la columna S (Métricas)
-                            ws.write_blank(fila_firmas + 6, 19, fmt_linea_firma)
-                            ws.write(fila_firmas + 7, 19, "FIRMA GERENTE DE ÁREA", fmt_texto_firma)
+            # Firma Gerente de Área colocada limpiamente en la columna S (Métricas)
+            ws.write_blank(fila_firmas + 6, 19, fmt_linea_firma)
+            ws.write(fila_firmas + 7, 19, "FIRMA GERENTE DE ÁREA", fmt_texto_firma)
             
-                            # Pie de Página de Protección Intelectual de Industria Sigrama
-                            ws.write(fila_firmas + 10, 0, "FO-SGC-02 PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
+            # Pie de Página de Protección Intelectual de Industria Sigrama
+            ws.write(fila_firmas + 10, 0, "FO-SGC-02 PROHIBIDA LA REPRODUCCIÓN TOTAL O PARCIAL, SIN AUTORIZACIÓN POR ESCRITO DE INDUSTRIA SIGRAMA S.A. DE C.V.", workbook.add_format({'font_name': 'Arial', 'font_size': 8, 'italic': True, 'color': '#777777'}))
 
-                # Renderizado de Tablas Desglosadas por Área en la Interfaz de la Aplicación (UI)
-                for ar in AREAS_LISTA_RAW:
-                    df_area_actual = matriz_final[matriz_final['area'] == ar]
-                    if not df_area_actual.empty:
-                        conteo_flat_area = df_area_actual[columnas_dias_str].values.flatten()
-                        c_a = list(conteo_flat_area).count("A")
-                        c_r = list(conteo_flat_area).count("R")
-                        c_f = list(conteo_flat_area).count("F")
-                        area_total_dias = c_a + c_r + c_f
+# Renderizado de Tablas Desglosadas por Área en la Interfaz de la Aplicación (UI)
+for ar in AREAS_LISTA_RAW:
+    df_area_actual = matriz_final[matriz_final['area'] == ar]
+    if not df_area_actual.empty:
+        conteo_flat_area = df_area_actual[columnas_dias_str].values.flatten()
+        c_a = list(conteo_flat_area).count("A")
+        c_r = list(conteo_flat_area).count("R")
+        c_f = list(conteo_flat_area).count("F")
+        area_total_dias = c_a + c_r + c_f
         
-                        st.markdown(f"#### {ar}")
-                        st.markdown(f"**Factor Asistencia de la Celda:** `{((area_total_dias - c_f) / area_total_dias * 100) if area_total_dias > 0 else 0:.1f}%` | **Puntualidad:** `{((c_a / (c_a + c_r) * 100) if (c_a + c_r) > 0 else 0):.1f}%`")
-                        st.dataframe(df_area_actual[cols_mostrar].style.map(aplicar_colores_matriz, subset=columnas_dias_str), use_container_width=True)
+        st.markdown(f"#### {ar}")
+        st.markdown(f"**Factor Asistencia de la Celda:** `{((area_total_dias - c_f) / area_total_dias * 100) if area_total_dias > 0 else 0:.1f}%` | **Puntualidad:** `{((c_a / (c_a + c_r) * 100) if (c_a + c_r) > 0 else 0):.1f}%`")
+        st.dataframe(df_area_actual[cols_mostrar].style.map(aplicar_colores_matriz, subset=columnas_dias_str), use_container_width=True)
 
-                # Sección Final de Descarga de los Reportes divididos
-                st.markdown("---")
-                st.subheader("📥 Guardar Libro de Pre-Nómina por Áreas")
-                st.download_button(
-                    label="📄 Descargar Reporte FO-RHU-23 Dividido por Áreas (.xlsx)", 
-                    data=buffer_excel.getvalue(), 
-                    file_name=f"FO-RHU-23_PRENOMINA_POR_AREAS_{fecha_fin.strftime('%Y%m%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                )
-                # Generar el archivo PDF en memoria
+# Sección Final de Descarga de los Reportes divididos
+st.markdown("---")
+st.subheader("📥 Guardar Libro de Pre-Nómina por Áreas")
+st.download_button(
+    label="📄 Descargar Reporte FO-RHU-23 Dividido por Áreas (.xlsx)", 
+    data=buffer_excel.getvalue(), 
+    file_name=f"FO-RHU-23_PRENOMINA_POR_AREAS_{fecha_fin.strftime('%Y%m%d')}.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+# Generar el archivo PDF en memoria
 
 
-                # 1. Ejecuta la función mejorada pasando las variables de control y horas
-                pdf_data = generar_pdf_reporte(
-                    fecha_inicio=fecha_inicio.strftime('%d/%m/%Y'),
-                    fecha_fin=fecha_fin.strftime('%d/%m/%Y'),
-                    hora_limite=hora_limite_input.strftime('%H:%M:%S'),
-                    ga_pct=ga_pct,
-                    gp_pct=gp_pct,
-                    aus_pct=max(0, 100 - ga_pct),
-                    matriz_final=matriz_final,
-                    columnas_dias=columnas_dias_str,
-                    areas_lista=AREAS_LISTA_RAW
-                )
+# 1. Ejecuta la función mejorada pasando las variables de control y horas
+pdf_data = generar_pdf_reporte(
+    fecha_inicio=fecha_inicio.strftime('%d/%m/%Y'),
+    fecha_fin=fecha_fin.strftime('%d/%m/%Y'),
+    hora_limite=hora_limite_input.strftime('%H:%M:%S'),
+    ga_pct=ga_pct,
+    gp_pct=gp_pct,
+    aus_pct=max(0, 100 - ga_pct),
+    matriz_final=matriz_final,
+    columnas_dias=columnas_dias_str,
+    areas_lista=AREAS_LISTA_RAW
+)
 
-                # 2. Botón interactivo en la pantalla principal
-                st.download_button(
-                    label="📄 Descargar Reporte FO-RHU-23 en PDF",
-                    data=pdf_data,
-                    file_name=f"FO-RHU-23_PRENOMINA_{fecha_fin.strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf"
-                )
+# 2. Botón interactivo en la pantalla principal
+st.download_button(
+    label="📄 Descargar Reporte FO-RHU-23 en PDF",
+    data=pdf_data,
+    file_name=f"FO-RHU-23_PRENOMINA_{fecha_fin.strftime('%Y%m%d')}.pdf",
+    mime="application/pdf"
+)
 
 
 # ==============================================================================
@@ -1207,10 +986,10 @@ with tab_historico:
             # B. TÍTULOS DE PLANTA METALES
             titulo_estilo = ParagraphStyle(
                 'TituloPlanta', parent=styles['Heading1'], fontSize=22, leading=26,
-                textColor=colors.HexColor('#EC2024'), alignment=1, spaceAfter=4
+                textColor=colors.HexColor('#2E4053'), alignment=1, spaceAfter=4
             )
             sub_estilo = ParagraphStyle(
-                'SubPlanta', fontSize=11, textColor=colors.HexColor('#111111'),
+                'SubPlanta', fontSize=11, textColor=colors.HexColor('#566573'),
                 alignment=1, spaceAfter=15
             )
             
@@ -1224,7 +1003,7 @@ with tab_historico:
             
             t = Table(tabla_datos, colWidths=[80, 85, 85, 95, 95, 110])
             estilo_tabla = TableStyle([
-                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#111111')),
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2E4053')),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.white),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                 ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
@@ -1249,9 +1028,9 @@ with tab_historico:
             d = Drawing(550, 110)
             
             relojes_config = [
-                {"cx": 90,  "val": v_asist, "titulo": "Asistencia", "color_txt": "#111111", "invertido": False},
-                {"cx": 275, "val": v_punt,  "titulo": "Puntualidad", "color_txt": "#888888", "invertido": False},
-                {"cx": 460, "val": v_ausen, "titulo": "Ausentismo", "color_txt": "#EC2024", "invertido": True}
+                {"cx": 90,  "val": v_asist, "titulo": "Asistencia", "color_txt": "#1E8449", "invertido": False},
+                {"cx": 275, "val": v_punt,  "titulo": "Puntualidad", "color_txt": "#2471A3", "invertido": False},
+                {"cx": 460, "val": v_ausen, "titulo": "Ausentismo", "color_txt": "#922B21", "invertido": True}
             ]
             
             r = 75  
