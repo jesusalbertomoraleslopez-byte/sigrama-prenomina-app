@@ -302,6 +302,7 @@ st.markdown("---") # Línea divisoria estética antes de iniciar los paneles y p
 # Constantes del Sistema
 ARCHIVO_PERSONAL = "personal.xlsx"
 ruta_carpeta = "./asistencias"
+ARCHIVO_HISTORICO = os.path.join(ruta_carpeta, "historico_semanal.xlsx").replace("\\", "/")
 
 if not os.path.exists(ruta_carpeta):
     os.makedirs(ruta_carpeta)
@@ -361,6 +362,92 @@ if st.session_state["usuario_rol"] is not None:
     
     if archivos_correo:
         st.sidebar.info(f"📋 {len(archivos_correo)} archivo(s) listos.")
+        
+        # Entrada de clave de autorización para guardar asistencias en GitHub
+        clave_usuario_asist = st.sidebar.text_input(
+            "Clave de Autorización para GitHub:", 
+            type="password", 
+            key="clave_asist_input"
+        )
+        
+        if st.sidebar.button("💾 Subir y Registrar en GitHub", use_container_width=True):
+            if clave_usuario_asist != "RHSigrama":
+                st.sidebar.error("❌ Clave incorrecta. No tienes autorización.")
+            else:
+                with st.sidebar.status("Subiendo archivos de asistencia...", expanded=True) as status:
+                    success_count = 0
+                    for archivo in archivos_correo:
+                        nombre_archivo = archivo.name
+                        # 1. Guardar de forma local
+                        ruta_local = os.path.join(ruta_carpeta, nombre_archivo).replace("\\", "/")
+                        with open(ruta_local, "wb") as f:
+                            f.write(archivo.getbuffer())
+                        
+                        # 2. Subir a GitHub si hay token
+                        if GITHUB_TOKEN:
+                            url_api_file = f"https://api.github.com/repos/{REPO_NAME}/contents/asistencias/{nombre_archivo}"
+                            headers_github = {
+                                "Authorization": f"token {GITHUB_TOKEN}",
+                                "Accept": "application/vnd.github.v3+json",
+                                "User-Agent": "Streamlit-App"
+                            }
+                            
+                            # Obtener SHA si ya existe para reemplazarlo
+                            sha_file = None
+                            res_get = requests.get(url_api_file, headers=headers_github, timeout=10)
+                            if res_get.status_code == 200:
+                                sha_file = res_get.json().get("sha")
+                            
+                            payload = {
+                                "message": f"Sincronización de asistencia: {nombre_archivo}",
+                                "content": base64.b64encode(archivo.getvalue()).decode("utf-8")
+                            }
+                            if sha_file:
+                                payload["sha"] = sha_file
+                                
+                            res_put = requests.put(url_api_file, json=payload, headers=headers_github, timeout=15)
+                            if res_put.status_code in [200, 201]:
+                                success_count += 1
+                            else:
+                                st.sidebar.error(f"Error subiendo {nombre_archivo} a GitHub: {res_put.status_code}")
+                        else:
+                            success_count += 1
+                    
+                    # 3. Recalcular e inyectar el nuevo histórico a GitHub
+                    df_hist_new = recalcular_historico_completo(ruta_carpeta, ARCHIVO_PERSONAL, hora_limite_input)
+                    if not df_hist_new.empty:
+                        df_hist_new.to_excel(ARCHIVO_HISTORICO, index=False)
+                        if GITHUB_TOKEN:
+                            url_api_hist = f"https://api.github.com/repos/{REPO_NAME}/contents/asistencias/historico_semanal.xlsx"
+                            headers_github = {
+                                "Authorization": f"token {GITHUB_TOKEN}",
+                                "Accept": "application/vnd.github.v3+json",
+                                "User-Agent": "Streamlit-App"
+                            }
+                            
+                            res_get_hist = requests.get(url_api_hist, headers=headers_github, timeout=10)
+                            sha_hist = None
+                            if res_get_hist.status_code == 200:
+                                sha_hist = res_get_hist.json().get("sha")
+                                
+                            with open(ARCHIVO_HISTORICO, "rb") as f_hist:
+                                conteo_bytes_hist = f_hist.read()
+                            
+                            payload_hist = {
+                                "message": "Sincronización de historico_semanal.xlsx",
+                                "content": base64.b64encode(conteo_bytes_hist).decode("utf-8")
+                            }
+                            if sha_hist:
+                                payload_hist["sha"] = sha_hist
+                                
+                            requests.put(url_api_hist, json=payload_hist, headers=headers_github, timeout=15)
+                    
+                    # Limpiamos el caché de Streamlit para que cargue los nuevos archivos xls
+                    st.cache_data.clear()
+                    
+                    status.update(label="✅ ¡Archivos e historial sincronizados!", state="complete")
+                    st.sidebar.success(f"🎉 {success_count} archivo(s) guardado(s) y procesado(s).")
+                    st.rerun()
         
     # Selección de Hora Límite
     hora_limite_input = st.sidebar.time_input(
@@ -1216,7 +1303,6 @@ with tab_historico:
     st.subheader("📈 Histórico General por Semana")
     st.write("Resumen consolidado de indicadores clave de la empresa.")
 
-    ARCHIVO_HISTORICO = os.path.join(ruta_carpeta, "historico_semanal.xlsx").replace("\\", "/")
 
     # Cálculo automático e inmediato de todos los periodos registrados en los archivos XLS
     df_hist = recalcular_historico_completo(ruta_carpeta, ARCHIVO_PERSONAL, hora_limite_input)
