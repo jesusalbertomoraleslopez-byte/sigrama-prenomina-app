@@ -414,8 +414,9 @@ def recalcular_historico_completo(ruta_dir_asistencias, archivo_personal_path, l
         total_a, total_r, total_f = 0, 0, 0
         total_records = 0
         for date_val in v:
-            df_day = df_m[df_m['Fecha_Clean'] == date_val]
-            day_map = dict(zip(df_day['#Empleado'].astype(str).str.strip(), df_day['Cod_Incidencia']))
+            df_day = df_m[df_m['Fecha_Clean'] == date_val].copy()
+            df_day['#Empleado'] = df_day['#Empleado'].astype(str).str.strip()
+            day_map = df_day.groupby('#Empleado')['Cod_Incidencia'].apply(lambda x: 'A' if 'A' in list(x) else ('R' if 'R' in list(x) else 'F')).to_dict()
             for emp in employees:
                 # Solo se considera al colaborador a partir de su primer registro de asistencia en el sistema
                 first_date = primeros_ingresos.get(emp)
@@ -1065,11 +1066,34 @@ with tab_reportes:
             if df_raw_filtrado.empty:
                 st.info("💡 **Aviso del Sistema:** No se encontraron asistencias en el rango de fechas seleccionado.")
             else:
-                matriz = df_raw_filtrado.pivot_table(index=['#Empleado', 'Nombre del Empleado'], columns='Dia_Num', values='Cod_Incidencia', aggfunc='first')
+                # Pivotar agrupando únicamente por #Empleado para evitar duplicación de filas por variación de nombres
+                matriz = df_raw_filtrado.pivot_table(
+                    index='#Empleado', 
+                    columns='Dia_Num', 
+                    values='Cod_Incidencia', 
+                    aggfunc=lambda x: 'A' if 'A' in list(x) else ('R' if 'R' in list(x) else 'F')
+                )
                 for col_dia in [d.day for d in lista_dias]:
                     if col_dia not in matriz.columns: matriz[col_dia] = None
                 matriz = matriz[[d.day for d in lista_dias]]
                 matriz_final = matriz.copy().reset_index()
+                matriz_final['#Empleado'] = matriz_final['#Empleado'].astype(str).str.strip()
+                
+                # Obtener catálogo de personal oficial para asociar Nombre y Área
+                df_personal_cat = cargar_catalogo_personal()[['id_empleado', 'nombre', 'area']]
+                df_personal_cat['id_empleado'] = df_personal_cat['id_empleado'].astype(str).str.strip()
+                
+                # Nombres de respaldo de las lecturas si no están en el catálogo
+                nombres_fallback = df_raw_filtrado.groupby('#Empleado')['Nombre del Empleado'].last().to_dict()
+                
+                # Unir con el catálogo oficial
+                matriz_final = matriz_final.merge(df_personal_cat, left_on='#Empleado', right_on='id_empleado', how='left')
+                
+                # Si el nombre viene nulo (colaborador no registrado en catálogo), usar nombre de respaldo
+                matriz_final['Nombre del Empleado'] = matriz_final.apply(
+                    lambda r: r['nombre'] if (pd.notna(r['nombre']) and str(r['nombre']).strip() != "") else nombres_fallback.get(r['#Empleado'], f"Empleado {r['#Empleado']}"), 
+                    axis=1
+                )
                 
                 for d in lista_dias:
                     num_dia = d.day
@@ -1092,16 +1116,6 @@ with tab_reportes:
                 matriz_final['ASISTENCIA'] = asistencias
                 matriz_final['DESEMPEÑO'] = desempenos
                 matriz_final.columns = [str(c) for c in matriz_final.columns]
-                matriz_final['#Empleado'] = matriz_final['#Empleado'].astype(str).str.strip()
-                
-
-
-                # Sincronización directa desde Excel de Personal (Corregida)
-                df_db_mapping = cargar_catalogo_personal()[['id_empleado', 'area']]
-                df_db_mapping['id_empleado'] = df_db_mapping['id_empleado'].astype(str).str.strip()
-                
-                # Unimos las tablas de forma limpia
-                matriz_final = matriz_final.merge(df_db_mapping, left_on='#Empleado', right_on='id_empleado', how='left')
                 
                 # Limpiamos los espacios en blanco del área
                 matriz_final['area'] = matriz_final['area'].fillna("⚪ Sin Asignar").astype(str).str.strip()
@@ -1533,12 +1547,12 @@ with tab_historico:
                     df_week_raw = df_m[df_m['Fecha_Clean'].isin(v)]
                     
                     if not df_week_raw.empty:
-                        # Pivot table
+                        # Pivot table agrupando únicamente por #Empleado
                         matriz_semana = df_week_raw.pivot_table(
                             index='#Empleado', 
                             columns='Fecha_Clean', 
                             values='Cod_Incidencia', 
-                            aggfunc='first'
+                            aggfunc=lambda x: 'A' if 'A' in list(x) else ('R' if 'R' in list(x) else 'F')
                         )
                         
                         # Nos aseguramos de incluir todas las fechas activas de la semana como columnas
