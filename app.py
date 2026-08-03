@@ -640,6 +640,8 @@ def aplicar_colores_matriz(val):
         return 'background-color: #f8d7da; color: #721c24; font-weight: bold; text-align: center;'
     elif val in ["S", "D"]:
         return 'background-color: #fff3cd; color: #856404; font-weight: bold; text-align: center;'
+    elif val == "TxT":
+        return 'background-color: #ffe0b2; color: #e65100; font-weight: bold; text-align: center;'
     return 'text-align: center;'
 
 def dibujar_reloj_donut(porcentaje, titulo, color_linea):
@@ -699,12 +701,13 @@ if st.session_state["usuario_rol"] is None:
     st.stop()
 
 # Declaración actualizada de las pestañas de la aplicación
-tab_reportes, tab_areas, tab_historico, tab_industria, tab_expedientes = st.tabs([
+tab_reportes, tab_areas, tab_historico, tab_industria, tab_expedientes, tab_txt = st.tabs([
     "📊 Pre-Nómina y Reportes", 
     "📁 Asignación de Áreas y Personal",
     "📈 Histórico Semanal",
     "🤖 Manufactura Inteligente & Stack",
-    "🎓 Expedientes & Capacitaciones"
+    "🎓 Expedientes & Capacitaciones",
+    "⏱️ Banco TxT"
 ])
 
 
@@ -2196,3 +2199,487 @@ with tab_expedientes:
                                     f'🎓 {val}</div>',
                                     unsafe_allow_html=True
                                 )
+
+# ==============================================================================
+# SECCIÓN BANCO TIEMPO POR TIEMPO (TxT) — FO-RHU-22 SOLICITUD DE PERMISOS
+# ==============================================================================
+
+ARCHIVO_BANCO_TXT = os.path.join(ruta_carpeta, "banco_txt.xlsx").replace("\\", "/")
+
+COLUMNAS_TXT = [
+    "folio", "fecha_emision", "id_empleado", "nombre_empleado",
+    "tipo", "dias", "fecha_inicio", "fecha_fin", "horas",
+    "causa", "periodo", "autoriza", "aplicado_en", "estatus"
+]
+
+
+def cargar_banco_txt() -> pd.DataFrame:
+    """Lee el banco_txt.xlsx o crea uno vacío si no existe."""
+    if not os.path.exists(ARCHIVO_BANCO_TXT):
+        df_vacio = pd.DataFrame(columns=COLUMNAS_TXT)
+        df_vacio.to_excel(ARCHIVO_BANCO_TXT, index=False)
+        return df_vacio
+    try:
+        df = pd.read_excel(ARCHIVO_BANCO_TXT, dtype=str)
+        # Aseguramos que existan todas las columnas esperadas
+        for col in COLUMNAS_TXT:
+            if col not in df.columns:
+                df[col] = ""
+        return df[COLUMNAS_TXT].fillna("")
+    except Exception:
+        return pd.DataFrame(columns=COLUMNAS_TXT)
+
+
+def guardar_banco_txt(df: pd.DataFrame) -> bool:
+    """Guarda el banco_txt.xlsx localmente y lo sube a GitHub si hay token."""
+    try:
+        df.to_excel(ARCHIVO_BANCO_TXT, index=False)
+        if GITHUB_TOKEN:
+            url_api = f"https://api.github.com/repos/{REPO_NAME}/contents/asistencias/banco_txt.xlsx"
+            headers_gh = {
+                "Authorization": f"token {GITHUB_TOKEN}",
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "Streamlit-App"
+            }
+            sha_val = None
+            res_get = requests.get(url_api, headers=headers_gh, timeout=10)
+            if res_get.status_code == 200:
+                sha_val = res_get.json().get("sha")
+            with open(ARCHIVO_BANCO_TXT, "rb") as fh:
+                contenido_b64 = base64.b64encode(fh.read()).decode("utf-8")
+            payload = {
+                "message": "Sincronizacion banco_txt.xlsx",
+                "content": contenido_b64
+            }
+            if sha_val:
+                payload["sha"] = sha_val
+            requests.put(url_api, json=payload, headers=headers_gh, timeout=15)
+        return True
+    except Exception:
+        return False
+
+
+def _generar_folio(df_existing: pd.DataFrame) -> str:
+    """Genera el próximo folio correlativo en formato TXT-YYYY-NNN."""
+    anio = datetime.now().year
+    registros_anio = df_existing[
+        df_existing["folio"].str.startswith(f"TXT-{anio}-", na=False)
+    ]
+    siguiente = len(registros_anio) + 1
+    return f"TXT-{anio}-{siguiente:03d}"
+
+
+def _calcular_saldo(df_txt: pd.DataFrame, id_emp: str) -> float:
+    """Calcula el saldo neto de horas TxT de un colaborador."""
+    if df_txt.empty:
+        return 0.0
+    df_emp = df_txt[
+        (df_txt["id_empleado"].str.strip() == str(id_emp).strip()) &
+        (df_txt["estatus"].str.strip().str.lower() != "cancelado")
+    ].copy()
+    if df_emp.empty:
+        return 0.0
+    df_emp["horas_num"] = pd.to_numeric(df_emp["horas"], errors="coerce").fillna(0)
+    cargas   = df_emp[df_emp["tipo"] == "CARGA"]["horas_num"].sum()
+    descargas = df_emp[df_emp["tipo"] == "DESCARGA"]["horas_num"].sum()
+    return round(cargas - descargas, 2)
+
+
+with tab_txt:
+    # ── Banner institucional ──────────────────────────────────────────────────
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #e65100 0%, #bf360c 100%);
+                border-radius: 12px; padding: 24px 32px; margin-bottom: 24px;">
+        <h2 style="color:#FFFFFF; font-family:'Montserrat',sans-serif; margin:0;">
+            ⏱️ Banco de Tiempo por Tiempo (TxT)
+        </h2>
+        <p style="color:#ffe0b2; font-family:'Questrial',sans-serif; margin:6px 0 0 0; font-size:15px;">
+            Control de Permisos FO-RHU-22 · Industria Sigrama S.A. de C.V.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Cargar datos
+    df_txt_data = cargar_banco_txt()
+    df_personal_base = cargar_catalogo_personal()
+
+    # ── KPI banner ───────────────────────────────────────────────────────────
+    total_inc  = len(df_txt_data)
+    total_cargas = len(df_txt_data[df_txt_data["tipo"] == "CARGA"]) if not df_txt_data.empty else 0
+    total_desc = len(df_txt_data[df_txt_data["tipo"] == "DESCARGA"]) if not df_txt_data.empty else 0
+
+    hrs_cargadas  = pd.to_numeric(df_txt_data[df_txt_data["tipo"] == "CARGA"]["horas"],   errors="coerce").fillna(0).sum() if not df_txt_data.empty else 0
+    hrs_descarg   = pd.to_numeric(df_txt_data[df_txt_data["tipo"] == "DESCARGA"]["horas"], errors="coerce").fillna(0).sum() if not df_txt_data.empty else 0
+
+    k1t, k2t, k3t, k4t = st.columns(4)
+    k1t.metric("📋 Total Incidencias", total_inc)
+    k2t.metric("➕ Cargas (permisos)", total_cargas, delta=f"+{hrs_cargadas:.1f} hrs")
+    k3t.metric("➖ Descargas (extras)", total_desc,  delta=f"-{hrs_descarg:.1f} hrs")
+    k4t.metric("📊 Saldo Sistema Total", f"{hrs_cargadas - hrs_descarg:.1f} hrs")
+
+    st.markdown("---")
+
+    # ── Sub-tabs ─────────────────────────────────────────────────────────────
+    txt_reg, txt_saldo, txt_hist = st.tabs([
+        "📋 Registrar Incidencia",
+        "📊 Banco por Colaborador",
+        "🗂️ Historial de Incidencias"
+    ])
+
+    # ════════════════════════════════════════════════════════════════════════
+    # SUB-TAB 1: REGISTRAR INCIDENCIA
+    # ════════════════════════════════════════════════════════════════════════
+    with txt_reg:
+        if st.session_state.get("usuario_rol") != "Administrador":
+            st.warning("🔒 Solo el Administrador puede registrar incidencias TxT.")
+        else:
+            st.subheader("📋 Nueva Incidencia — Solicitud de Permisos FO-RHU-22")
+
+            # Selector de colaborador
+            if df_personal_base.empty:
+                st.error("No hay colaboradores en el catálogo de personal.")
+            else:
+                ids_p   = df_personal_base["id_empleado"].tolist()
+                noms_p  = df_personal_base["nombre"].tolist()
+                opts_p  = [f"{i} — {n}" for i, n in zip(ids_p, noms_p)]
+
+                col_form1, col_form2 = st.columns(2)
+
+                with col_form1:
+                    sel_emp_txt = st.selectbox(
+                        "👤 Colaborador:", opts_p, key="txt_sel_emp"
+                    )
+                    idx_emp_sel = opts_p.index(sel_emp_txt)
+                    id_emp_sel  = ids_p[idx_emp_sel]
+                    nom_emp_sel = noms_p[idx_emp_sel]
+
+                    # Saldo actual del colaborador seleccionado
+                    saldo_actual = _calcular_saldo(df_txt_data, id_emp_sel)
+                    color_saldo  = "#2e7d32" if saldo_actual >= 0 else "#c62828"
+                    st.markdown(
+                        f'<div style="background:#f5f5f5; border-left:4px solid {color_saldo}; '
+                        f'border-radius:6px; padding:12px 16px; margin:8px 0;">'
+                        f'<span style="font-size:12px;color:#666;">Saldo actual de horas TxT</span><br>'
+                        f'<span style="font-size:22px;font-weight:700;color:{color_saldo};">'
+                        f'{saldo_actual:.2f} hrs</span></div>',
+                        unsafe_allow_html=True
+                    )
+
+                    tipo_inc = st.radio(
+                        "Tipo de movimiento:",
+                        ["➕ CARGA (permiso presentado)", "➖ DESCARGA (tiempo extra trabajado)"],
+                        key="txt_tipo_radio"
+                    )
+                    tipo_val = "CARGA" if "CARGA" in tipo_inc else "DESCARGA"
+
+                    folio_auto = _generar_folio(df_txt_data)
+                    folio_inp  = st.text_input(
+                        "📄 Folio del Formato FO-RHU-22:",
+                        value=folio_auto,
+                        key="txt_folio"
+                    )
+                    fecha_emision_inp = st.date_input(
+                        "📅 Fecha de Emisión del Formato:",
+                        value=datetime.now().date(),
+                        key="txt_fecha_emision"
+                    )
+
+                with col_form2:
+                    num_dias_inp = st.number_input(
+                        "📆 Número de días que abarca:",
+                        min_value=1, max_value=30, value=1,
+                        key="txt_num_dias"
+                    )
+                    fecha_inicio_inp = st.date_input(
+                        "📅 Fecha Inicio (primer día afectado):",
+                        value=datetime.now().date(),
+                        key="txt_fecha_ini"
+                    )
+                    fecha_fin_inp = st.date_input(
+                        "📅 Fecha Fin (último día afectado):",
+                        value=datetime.now().date(),
+                        key="txt_fecha_fin"
+                    )
+                    horas_inp = st.number_input(
+                        "⏱️ Cantidad de Horas:",
+                        min_value=0.5, max_value=48.0,
+                        value=1.0, step=0.5,
+                        format="%.1f",
+                        key="txt_horas"
+                    )
+                    periodo_inp = st.text_input(
+                        "📋 Periodo (ej: 16-31 Jul 2026):",
+                        key="txt_periodo"
+                    )
+                    autoriza_inp = st.text_input(
+                        "✍️ Autoriza (Jefe de Depto / Nombre):",
+                        key="txt_autoriza"
+                    )
+
+                causa_inp = st.text_area(
+                    "📝 Causa o Descripción de la Incidencia:",
+                    placeholder="Ej: Permiso por cita médica. Se presentó formato FO-RHU-22 folio TXT-2026-001 autorizado por Jefe de Área.",
+                    height=80,
+                    key="txt_causa"
+                )
+
+                # Validación previa
+                if tipo_val == "DESCARGA":
+                    if saldo_actual - horas_inp < 0:
+                        st.warning(
+                            f"⚠️ Esta descarga de **{horas_inp:.1f} hrs** dejaría el banco en "
+                            f"**{saldo_actual - horas_inp:.1f} hrs** (saldo negativo). "
+                            f"¿Deseas continuar?"
+                        )
+
+                col_btn1, col_btn2 = st.columns([3, 1])
+                with col_btn1:
+                    guardar_btn = st.button(
+                        "💾 Registrar Incidencia TxT",
+                        use_container_width=True,
+                        type="primary",
+                        key="txt_guardar_btn"
+                    )
+                with col_btn2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+
+                if guardar_btn:
+                    if not folio_inp.strip():
+                        st.error("❌ El folio es obligatorio.")
+                    elif not causa_inp.strip():
+                        st.error("❌ La causa/descripción es obligatoria.")
+                    elif fecha_fin_inp < fecha_inicio_inp:
+                        st.error("❌ La fecha fin no puede ser anterior a la fecha inicio.")
+                    else:
+                        nuevo_registro = {
+                            "folio":            folio_inp.strip().upper(),
+                            "fecha_emision":    str(fecha_emision_inp),
+                            "id_empleado":      id_emp_sel,
+                            "nombre_empleado":  nom_emp_sel,
+                            "tipo":             tipo_val,
+                            "dias":             str(num_dias_inp),
+                            "fecha_inicio":     str(fecha_inicio_inp),
+                            "fecha_fin":        str(fecha_fin_inp),
+                            "horas":            str(horas_inp),
+                            "causa":            causa_inp.strip(),
+                            "periodo":          periodo_inp.strip(),
+                            "autoriza":         autoriza_inp.strip(),
+                            "aplicado_en":      str(datetime.now().date()),
+                            "estatus":          "Aplicado"
+                        }
+                        df_txt_data = pd.concat(
+                            [df_txt_data, pd.DataFrame([nuevo_registro])],
+                            ignore_index=True
+                        )
+                        ok = guardar_banco_txt(df_txt_data)
+                        st.cache_data.clear()
+                        if ok:
+                            signo = "+" if tipo_val == "CARGA" else "-"
+                            nuevo_saldo = _calcular_saldo(df_txt_data, id_emp_sel)
+                            st.success(
+                                f"✅ Incidencia **{folio_inp.upper()}** registrada correctamente. "
+                                f"Movimiento: **{signo}{horas_inp:.1f} hrs**. "
+                                f"Nuevo saldo de **{nom_emp_sel}**: **{nuevo_saldo:.2f} hrs**"
+                            )
+                            st.rerun()
+                        else:
+                            st.error("❌ Error al guardar el archivo. Verifique permisos de escritura.")
+
+    # ════════════════════════════════════════════════════════════════════════
+    # SUB-TAB 2: BANCO POR COLABORADOR
+    # ════════════════════════════════════════════════════════════════════════
+    with txt_saldo:
+        st.subheader("📊 Saldo de Horas TxT por Colaborador")
+
+        if df_personal_base.empty:
+            st.info("No hay colaboradores registrados en el catálogo de personal.")
+        else:
+            filas_saldo = []
+            for _, row_p in df_personal_base.iterrows():
+                id_e   = str(row_p.get("id_empleado", "")).strip()
+                nom_e  = str(row_p.get("nombre", "")).strip()
+                area_e = str(row_p.get("area", "")).strip()
+                saldo  = _calcular_saldo(df_txt_data, id_e)
+
+                df_emp_mov = df_txt_data[
+                    (df_txt_data["id_empleado"].str.strip() == id_e) &
+                    (df_txt_data["estatus"].str.strip().str.lower() != "cancelado")
+                ] if not df_txt_data.empty else pd.DataFrame()
+
+                cargas_e   = pd.to_numeric(df_emp_mov[df_emp_mov["tipo"] == "CARGA"]["horas"],    errors="coerce").fillna(0).sum() if not df_emp_mov.empty else 0
+                descargas_e = pd.to_numeric(df_emp_mov[df_emp_mov["tipo"] == "DESCARGA"]["horas"], errors="coerce").fillna(0).sum() if not df_emp_mov.empty else 0
+                num_inc_e  = len(df_emp_mov)
+
+                filas_saldo.append({
+                    "# Empleado":    id_e,
+                    "Nombre":        nom_e,
+                    "Área":          area_e,
+                    "Horas Cargadas (+)":   round(cargas_e, 2),
+                    "Horas Descargadas (-)": round(descargas_e, 2),
+                    "Saldo Actual (hrs)":   saldo,
+                    "# Incidencias":  num_inc_e
+                })
+
+            df_saldo_view = pd.DataFrame(filas_saldo)
+
+            # Resaltar con colores
+            def _color_saldo_col(val):
+                try:
+                    v = float(val)
+                    if v > 0:   return "color: #2e7d32; font-weight: bold;"
+                    elif v < 0: return "color: #c62828; font-weight: bold;"
+                    else:       return "color: #555;"
+                except Exception:
+                    return ""
+
+            styled_saldo = df_saldo_view.style.applymap(
+                _color_saldo_col, subset=["Saldo Actual (hrs)"]
+            )
+            st.dataframe(styled_saldo, use_container_width=True, hide_index=True)
+
+            # Descarga del resumen
+            buf_saldo = io.BytesIO()
+            df_saldo_view.to_excel(buf_saldo, index=False)
+            buf_saldo.seek(0)
+            st.download_button(
+                "⬇️ Descargar Resumen Banco TxT (.xlsx)",
+                data=buf_saldo,
+                file_name="resumen_banco_txt_sigrama.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="dl_saldo_txt"
+            )
+
+            # Gráfica de barras de saldo
+            if not df_saldo_view.empty and df_saldo_view["Saldo Actual (hrs)"].sum() != 0:
+                st.markdown("#### 📊 Comparativa de Saldos")
+                colores_barras = [
+                    "#2e7d32" if v >= 0 else "#c62828"
+                    for v in df_saldo_view["Saldo Actual (hrs)"]
+                ]
+                fig_saldo = go.Figure(go.Bar(
+                    x=df_saldo_view["Nombre"],
+                    y=df_saldo_view["Saldo Actual (hrs)"],
+                    marker_color=colores_barras,
+                    text=[f"{v:.1f}" for v in df_saldo_view["Saldo Actual (hrs)"]],
+                    textposition="outside"
+                ))
+                fig_saldo.update_layout(
+                    title="Saldo de Horas TxT por Colaborador",
+                    xaxis_title="Colaborador",
+                    yaxis_title="Horas",
+                    font=dict(family="Questrial", size=13),
+                    plot_bgcolor="#ffffff",
+                    paper_bgcolor="#ffffff",
+                    margin=dict(t=50, b=80, l=40, r=20),
+                    height=350,
+                    shapes=[dict(
+                        type="line", x0=-0.5, x1=len(df_saldo_view)-0.5,
+                        y0=0, y1=0,
+                        line=dict(color="#111", width=1.5, dash="dash")
+                    )]
+                )
+                st.plotly_chart(fig_saldo, use_container_width=True)
+
+    # ════════════════════════════════════════════════════════════════════════
+    # SUB-TAB 3: HISTORIAL DE INCIDENCIAS
+    # ════════════════════════════════════════════════════════════════════════
+    with txt_hist:
+        st.subheader("🗂️ Historial Completo de Incidencias TxT")
+
+        if df_txt_data.empty:
+            st.info("📋 Aún no hay incidencias registradas. Usa la pestaña '📋 Registrar Incidencia' para comenzar.")
+        else:
+            # ── Filtros ──────────────────────────────────────────────────
+            hf1, hf2, hf3 = st.columns(3)
+            with hf1:
+                emp_opts_h = ["— Todos —"] + sorted(df_txt_data["nombre_empleado"].unique().tolist())
+                emp_fil_h  = st.selectbox("👤 Empleado:", emp_opts_h, key="hist_txt_emp")
+            with hf2:
+                tipo_opts_h = ["— Todos —", "CARGA", "DESCARGA"]
+                tipo_fil_h  = st.selectbox("🔄 Tipo:", tipo_opts_h, key="hist_txt_tipo")
+            with hf3:
+                est_opts_h = ["— Todos —"] + sorted(df_txt_data["estatus"].unique().tolist())
+                est_fil_h  = st.selectbox("📌 Estatus:", est_opts_h, key="hist_txt_est")
+
+            df_hist_view = df_txt_data.copy()
+            if emp_fil_h  != "— Todos —":
+                df_hist_view = df_hist_view[df_hist_view["nombre_empleado"] == emp_fil_h]
+            if tipo_fil_h != "— Todos —":
+                df_hist_view = df_hist_view[df_hist_view["tipo"] == tipo_fil_h]
+            if est_fil_h  != "— Todos —":
+                df_hist_view = df_hist_view[df_hist_view["estatus"] == est_fil_h]
+
+            st.markdown(f"**{len(df_hist_view)}** incidencias encontradas.")
+
+            st.dataframe(
+                df_hist_view.rename(columns={
+                    "folio":           "Folio",
+                    "fecha_emision":   "Fecha Emisión",
+                    "id_empleado":     "# Empleado",
+                    "nombre_empleado": "Nombre",
+                    "tipo":            "Tipo",
+                    "dias":            "Días",
+                    "fecha_inicio":    "Fecha Inicio",
+                    "fecha_fin":       "Fecha Fin",
+                    "horas":           "Horas",
+                    "causa":           "Causa",
+                    "periodo":         "Periodo",
+                    "autoriza":        "Autoriza",
+                    "aplicado_en":     "Aplicado en",
+                    "estatus":         "Estatus"
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
+
+            # Cancelar incidencia (solo Admin)
+            if st.session_state.get("usuario_rol") == "Administrador":
+                st.markdown("---")
+                st.markdown("#### 🗑️ Cancelar una Incidencia")
+                folios_act = df_txt_data[
+                    df_txt_data["estatus"].str.strip().str.lower() != "cancelado"
+                ]["folio"].tolist()
+
+                if folios_act:
+                    folio_cancel = st.selectbox(
+                        "Selecciona el folio a cancelar:",
+                        folios_act,
+                        key="txt_cancel_sel"
+                    )
+                    motivo_cancel = st.text_input(
+                        "Motivo de la cancelación:",
+                        key="txt_cancel_motivo"
+                    )
+                    if st.button("🗑️ Cancelar Incidencia", key="txt_cancel_btn", type="secondary"):
+                        if not motivo_cancel.strip():
+                            st.error("❌ Debes indicar el motivo de la cancelación.")
+                        else:
+                            df_txt_data.loc[
+                                df_txt_data["folio"] == folio_cancel, "estatus"
+                            ] = "Cancelado"
+                            df_txt_data.loc[
+                                df_txt_data["folio"] == folio_cancel, "causa"
+                            ] = df_txt_data.loc[
+                                df_txt_data["folio"] == folio_cancel, "causa"
+                            ].astype(str) + f" [CANCELADO: {motivo_cancel.strip()}]"
+                            ok_cancel = guardar_banco_txt(df_txt_data)
+                            st.cache_data.clear()
+                            if ok_cancel:
+                                st.success(f"✅ Incidencia **{folio_cancel}** cancelada.")
+                                st.rerun()
+                            else:
+                                st.error("❌ Error al guardar la cancelación.")
+                else:
+                    st.info("No hay incidencias activas para cancelar.")
+
+            # Descarga del historial filtrado
+            buf_hist = io.BytesIO()
+            df_hist_view.to_excel(buf_hist, index=False)
+            buf_hist.seek(0)
+            st.download_button(
+                "⬇️ Descargar Historial (.xlsx)",
+                data=buf_hist,
+                file_name="historial_incidencias_txt_sigrama.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="dl_hist_txt"
+            )
