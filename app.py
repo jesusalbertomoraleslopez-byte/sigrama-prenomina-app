@@ -699,12 +699,14 @@ if st.session_state["usuario_rol"] is None:
     st.stop()
 
 # Declaración actualizada de las pestañas de la aplicación
-tab_reportes, tab_areas, tab_historico, tab_industria = st.tabs([
+tab_reportes, tab_areas, tab_historico, tab_industria, tab_expedientes = st.tabs([
     "📊 Pre-Nómina y Reportes", 
     "📁 Asignación de Áreas y Personal",
     "📈 Histórico Semanal",
-    "🤖 Manufactura Inteligente & Stack"
+    "🤖 Manufactura Inteligente & Stack",
+    "🎓 Expedientes & Capacitaciones"
 ])
+
 
 
 
@@ -1707,3 +1709,490 @@ st.markdown(
     '</div>', 
     unsafe_allow_html=True
 )
+
+# ==============================================================================
+# SECCIÓN EXPEDIENTES & CAPACITACIONES — MÓDULO DC-3 Y PERFIL COLABORADOR
+# ==============================================================================
+
+RUTA_ACCESS_DB = "PERSONAL.accdb"
+PS32 = r"C:\Windows\SysWOW64\WindowsPowerShell\v1.0\powershell.exe"
+
+import subprocess
+import json as _json
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def leer_tabla_access(tabla: str) -> pd.DataFrame:
+    """Lee una tabla de la base de datos Access usando PowerShell 32-bit + ACE OLEDB."""
+    if not os.path.exists(PS32):
+        return pd.DataFrame()
+    ps_script = f"""
+$conn = New-Object -ComObject ADODB.Connection
+$conn.Open("Provider=Microsoft.ACE.OLEDB.16.0;Data Source={RUTA_ACCESS_DB};")
+$rs = New-Object -ComObject ADODB.Recordset
+$rs.Open("SELECT * FROM [{tabla}]", $conn, 1, 1)
+$cols = @()
+for ($i=0; $i -lt $rs.Fields.Count; $i++) {{ $cols += $rs.Fields.Item($i).Name }}
+$rows = @()
+while (-not $rs.EOF) {{
+    $row = @{{}}
+    for ($i=0; $i -lt $rs.Fields.Count; $i++) {{
+        $fname = $rs.Fields.Item($i).Name
+        $fval = $rs.Fields.Item($i).Value
+        if ($fval -is [DateTime]) {{ $fval = $fval.ToString("yyyy-MM-dd") }}
+        $row[$fname] = if ($fval -eq $null) {{ "" }} else {{ [string]$fval }}
+    }}
+    $rows += [PSCustomObject]$row
+    $rs.MoveNext()
+}}
+$rs.Close()
+$conn.Close()
+$rows | ConvertTo-Json -Depth 3
+"""
+    try:
+        res = subprocess.run(
+            [PS32, "-Command", ps_script],
+            capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=30
+        )
+        if not res.stdout.strip():
+            return pd.DataFrame()
+        raw = res.stdout.strip()
+        # PowerShell returns a single object if 1 row, wrap it
+        if raw.startswith("{"):
+            raw = f"[{raw}]"
+        datos = _json.loads(raw)
+        return pd.DataFrame(datos)
+    except Exception:
+        return pd.DataFrame()
+
+
+def _limpiar_texto(val) -> str:
+    s = str(val).strip()
+    return "" if s in ("None", "nan", "NULL", "") else s
+
+
+with tab_expedientes:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #111111 0%, #2c2c2c 100%);
+                border-radius: 12px; padding: 24px 32px; margin-bottom: 24px;">
+        <h2 style="color:#FFFFFF; font-family:'Montserrat',sans-serif; margin:0;">
+            🎓 Expedientes Digitales & Control de Capacitación DC-3
+        </h2>
+        <p style="color:#EC2024; font-family:'Questrial',sans-serif; margin:6px 0 0 0; font-size:15px;">
+            Industria Sigrama S.A. de C.V. — Dirección de Capital Humano
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Verificar si la DB local existe
+    db_disponible = os.path.exists(RUTA_ACCESS_DB)
+
+    if not db_disponible:
+        st.warning(
+            "⚠️ **Base de datos no encontrada:** `PERSONAL.accdb` no está en la carpeta del proyecto. "
+            "Por favor copia el archivo ahí para habilitar este módulo.",
+            icon="⚠️"
+        )
+    else:
+        # Carga de tablas
+        with st.spinner("🔄 Cargando base de datos de Capital Humano..."):
+            df_personal_acc = leer_tabla_access("PERSONAL")
+            df_cursos_acc   = leer_tabla_access("CURSOS")
+            df_puestos_acc  = leer_tabla_access("PUESTOS")
+            df_cursos_cat   = leer_tabla_access("Cusos_Disponibles")
+
+        if df_personal_acc.empty:
+            st.error("❌ No se pudo conectar a la base de datos Access. Verifica que el motor ACE OLEDB esté instalado.")
+        else:
+            # ---- Limpiar datos ----
+            df_personal_acc = df_personal_acc.fillna("").astype(str).applymap(str.strip)
+            df_cursos_acc   = df_cursos_acc.fillna("").astype(str).applymap(str.strip)
+
+            # ---- KPI banner superior ----
+            total_emp  = len(df_personal_acc)
+            total_cur  = len(df_cursos_acc)
+            dc3_count  = len(df_cursos_acc[df_cursos_acc.get("DCIII", pd.Series(dtype=str)).apply(
+                lambda v: str(v).strip() not in ("", "None", "nan"))])
+            horas_col  = "Horas_Invertidas"
+            total_hrs  = 0
+            if horas_col in df_cursos_acc.columns:
+                total_hrs = pd.to_numeric(df_cursos_acc[horas_col], errors="coerce").fillna(0).sum()
+
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("👤 Colaboradores en BD", total_emp)
+            k2.metric("📚 Registros de Capacitación", total_cur)
+            k3.metric("📜 Constancias DC-3", dc3_count)
+            k4.metric("⏱️ Horas Totales de Capacitación", f"{int(total_hrs):,} hrs")
+
+            st.markdown("---")
+
+            # ====== SUB-PESTAÑAS ======
+            sub_ficha, sub_cursos, sub_dashboard, sub_catalogos = st.tabs([
+                "👤 Ficha del Colaborador",
+                "📚 Historial de Capacitación",
+                "📊 Dashboard DC-3",
+                "📋 Catálogos"
+            ])
+
+            # ─────────────────────────────────────────────
+            # SUB-TAB 1: FICHA DEL COLABORADOR
+            # ─────────────────────────────────────────────
+            with sub_ficha:
+                st.subheader("👤 Expediente Digital del Colaborador")
+
+                col_sel, col_info = st.columns([1, 2])
+
+                with col_sel:
+                    nombres_emp = df_personal_acc.get("Nombre_Empleado_Robotica",
+                                                       pd.Series(dtype=str)).tolist()
+                    ids_emp     = df_personal_acc.get("Numero_Control_Personal",
+                                                       pd.Series(dtype=str)).tolist()
+                    opciones    = [f"{nid} — {nom}" for nid, nom in zip(ids_emp, nombres_emp)]
+                    sel         = st.selectbox("🔍 Selecciona un colaborador:", opciones, key="ficha_sel_emp")
+
+                if sel:
+                    idx_sel = opciones.index(sel)
+                    fila    = df_personal_acc.iloc[idx_sel]
+
+                    with col_info:
+                        nombre_disp = _limpiar_texto(fila.get("Nombre_Empleado_Robotica", ""))
+                        id_disp     = _limpiar_texto(fila.get("Numero_Control_Personal", ""))
+                        puesto_disp = _limpiar_texto(fila.get("Puesto", ""))
+                        ingreso     = _limpiar_texto(fila.get("Fecha_de_Ingreso", ""))
+
+                        st.markdown(f"""
+                        <div style="background:#f8f9fa; border-left: 4px solid #EC2024;
+                                    border-radius: 8px; padding: 20px; margin-bottom: 16px;">
+                            <h3 style="color:#111111; margin:0 0 4px 0; font-family:'Montserrat',sans-serif;">
+                                {nombre_disp}
+                            </h3>
+                            <p style="color:#EC2024; font-weight:bold; margin:0 0 8px 0;">
+                                ID: {id_disp} &nbsp;|&nbsp; {puesto_disp}
+                            </p>
+                            <p style="color:#555; font-size:13px; margin:0;">
+                                📅 Fecha de ingreso: {ingreso if ingreso else "No registrada"}
+                            </p>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    # Expediente en grid
+                    campos_expte = {
+                        "🪪 CURP":          fila.get("CURP", ""),
+                        "📋 RFC":            fila.get("RFC", ""),
+                        "🏥 NSS":            fila.get("NSS", ""),
+                        "🩸 Tipo de Sangre": fila.get("Tipo_Sangre", ""),
+                        "⚠️ Padecimientos":  fila.get("Padecimientos:", ""),
+                        "🌿 Alergias":       fila.get("Alergias:", ""),
+                        "📞 Teléfono":       fila.get("Telefono:", ""),
+                    }
+
+                    g1, g2 = st.columns(2)
+                    items = list(campos_expte.items())
+                    for i, (campo, valor) in enumerate(items):
+                        val_clean = _limpiar_texto(valor) or "—"
+                        target_col = g1 if i % 2 == 0 else g2
+                        target_col.markdown(f"""
+                        <div style="background:#ffffff; border: 1px solid #e0e0e0;
+                                    border-radius: 6px; padding: 12px 16px; margin-bottom: 10px;">
+                            <span style="font-size:12px; color:#888; display:block;">{campo}</span>
+                            <span style="font-size:15px; font-weight:600; color:#111;">{val_clean}</span>
+                        </div>
+                        """, unsafe_allow_html=True)
+
+                    # Cursos de este colaborador
+                    st.markdown("#### 📚 Capacitaciones registradas")
+                    emp_id_str = _limpiar_texto(fila.get("Numero_Control_Personal", ""))
+                    if "Empleado" in df_cursos_acc.columns:
+                        df_emp_cursos = df_cursos_acc[
+                            df_cursos_acc["Empleado"].str.strip() == emp_id_str
+                        ].copy()
+                    else:
+                        df_emp_cursos = pd.DataFrame()
+
+                    if df_emp_cursos.empty:
+                        st.info("Este colaborador no tiene cursos registrados en la base de datos.")
+                    else:
+                        cols_vis = [c for c in [
+                            "Nombre_del_Curso", "Fecha_del_curso", "Horas_Invertidas",
+                            "Quien_imparte", "DCIII", "Donde_curso", "Competencias_adquiridas"
+                        ] if c in df_emp_cursos.columns]
+                        st.dataframe(
+                            df_emp_cursos[cols_vis].rename(columns={
+                                "Nombre_del_Curso": "Curso",
+                                "Fecha_del_curso": "Fecha",
+                                "Horas_Invertidas": "Horas",
+                                "Quien_imparte": "Impartidor",
+                                "DCIII": "Constancia DC-3",
+                                "Donde_curso": "Lugar",
+                                "Competencias_adquiridas": "Competencias"
+                            }),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+
+            # ─────────────────────────────────────────────
+            # SUB-TAB 2: HISTORIAL DE CAPACITACIÓN
+            # ─────────────────────────────────────────────
+            with sub_cursos:
+                st.subheader("📚 Historial Completo de Capacitación")
+
+                if df_cursos_acc.empty:
+                    st.info("No hay registros de capacitación disponibles.")
+                else:
+                    c_fil1, c_fil2, c_fil3 = st.columns(3)
+                    with c_fil1:
+                        cursos_unicos = ["— Todos —"] + sorted(
+                            df_cursos_acc.get("Nombre_del_Curso", pd.Series(dtype=str))
+                            .apply(lambda x: _limpiar_texto(x))
+                            .replace("", "Sin nombre").unique().tolist()
+                        )
+                        curso_fil = st.selectbox("🔍 Filtrar por curso:", cursos_unicos, key="hist_curso_fil")
+
+                    with c_fil2:
+                        emps_unicos = ["— Todos —"] + sorted(
+                            df_cursos_acc.get("Empleado", pd.Series(dtype=str))
+                            .apply(_limpiar_texto).unique().tolist()
+                        )
+                        emp_fil = st.selectbox("👤 Filtrar por empleado:", emps_unicos, key="hist_emp_fil")
+
+                    with c_fil3:
+                        dc3_fil = st.selectbox(
+                            "📜 Constancia DC-3:",
+                            ["— Todos —", "✅ Con DC-3", "❌ Sin DC-3"],
+                            key="hist_dc3_fil"
+                        )
+
+                    df_hist_view = df_cursos_acc.copy()
+
+                    if curso_fil != "— Todos —":
+                        df_hist_view = df_hist_view[
+                            df_hist_view.get("Nombre_del_Curso", pd.Series(dtype=str))
+                            .apply(lambda x: _limpiar_texto(x)) == curso_fil
+                        ]
+                    if emp_fil != "— Todos —":
+                        df_hist_view = df_hist_view[
+                            df_hist_view.get("Empleado", pd.Series(dtype=str))
+                            .apply(_limpiar_texto) == emp_fil
+                        ]
+                    if dc3_fil == "✅ Con DC-3":
+                        df_hist_view = df_hist_view[
+                            df_hist_view.get("DCIII", pd.Series(dtype=str))
+                            .apply(lambda x: _limpiar_texto(x) not in ("", "None", "nan"))
+                        ]
+                    elif dc3_fil == "❌ Sin DC-3":
+                        df_hist_view = df_hist_view[
+                            df_hist_view.get("DCIII", pd.Series(dtype=str))
+                            .apply(lambda x: _limpiar_texto(x) in ("", "None", "nan"))
+                        ]
+
+                    st.markdown(f"**{len(df_hist_view)}** registros encontrados.")
+
+                    cols_tabla = [c for c in [
+                        "Empleado", "Nombre_del_Curso", "Fecha_del_curso", "Cierre_del_Curso",
+                        "Horas_Invertidas", "Quien_imparte", "DCIII", "Donde_curso",
+                        "Valor_Curricular", "Competencias_adquiridas"
+                    ] if c in df_hist_view.columns]
+
+                    st.dataframe(
+                        df_hist_view[cols_tabla].rename(columns={
+                            "Empleado": "# Empleado",
+                            "Nombre_del_Curso": "Curso",
+                            "Fecha_del_curso": "Inicio",
+                            "Cierre_del_Curso": "Cierre",
+                            "Horas_Invertidas": "Horas",
+                            "Quien_imparte": "Impartidor",
+                            "DCIII": "Constancia DC-3",
+                            "Donde_curso": "Lugar",
+                            "Valor_Curricular": "Valor Curr.",
+                            "Competencias_adquiridas": "Competencias"
+                        }),
+                        use_container_width=True,
+                        hide_index=True
+                    )
+
+                    # Descarga
+                    buf_cursos = io.BytesIO()
+                    df_hist_view.to_excel(buf_cursos, index=False)
+                    buf_cursos.seek(0)
+                    st.download_button(
+                        "⬇️ Descargar Historial (.xlsx)",
+                        data=buf_cursos,
+                        file_name="historial_capacitacion_sigrama.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="dl_historial_cap"
+                    )
+
+            # ─────────────────────────────────────────────
+            # SUB-TAB 3: DASHBOARD DC-3
+            # ─────────────────────────────────────────────
+            with sub_dashboard:
+                st.subheader("📊 Dashboard de Capacitación e Indicadores DC-3")
+
+                if df_cursos_acc.empty:
+                    st.info("Sin datos suficientes para generar el dashboard.")
+                else:
+                    d1, d2 = st.columns(2)
+
+                    # Horas por empleado
+                    with d1:
+                        if "Empleado" in df_cursos_acc.columns and "Horas_Invertidas" in df_cursos_acc.columns:
+                            df_hrs = df_cursos_acc.copy()
+                            df_hrs["Horas_Invertidas"] = pd.to_numeric(
+                                df_hrs["Horas_Invertidas"], errors="coerce").fillna(0)
+                            hrs_emp = (
+                                df_hrs.groupby("Empleado")["Horas_Invertidas"]
+                                .sum()
+                                .sort_values(ascending=False)
+                                .reset_index()
+                            )
+                            fig_hrs = go.Figure(go.Bar(
+                                x=hrs_emp["Empleado"],
+                                y=hrs_emp["Horas_Invertidas"],
+                                marker_color="#EC2024",
+                                text=hrs_emp["Horas_Invertidas"].astype(int),
+                                textposition="outside"
+                            ))
+                            fig_hrs.update_layout(
+                                title="⏱️ Horas de Capacitación por Empleado",
+                                xaxis_title="# Empleado",
+                                yaxis_title="Horas",
+                                font=dict(family="Questrial", size=13),
+                                plot_bgcolor="#ffffff",
+                                paper_bgcolor="#ffffff",
+                                margin=dict(t=50, b=40, l=30, r=10),
+                                height=350
+                            )
+                            st.plotly_chart(fig_hrs, use_container_width=True)
+
+                    # Cursos más frecuentes
+                    with d2:
+                        if "Nombre_del_Curso" in df_cursos_acc.columns:
+                            top_cursos = (
+                                df_cursos_acc["Nombre_del_Curso"]
+                                .apply(_limpiar_texto)
+                                .value_counts()
+                                .head(10)
+                                .reset_index()
+                            )
+                            top_cursos.columns = ["Curso", "Participantes"]
+                            fig_top = go.Figure(go.Bar(
+                                y=top_cursos["Curso"],
+                                x=top_cursos["Participantes"],
+                                orientation="h",
+                                marker_color="#111111",
+                                text=top_cursos["Participantes"],
+                                textposition="outside"
+                            ))
+                            fig_top.update_layout(
+                                title="🏆 Top 10 Cursos más Impartidos",
+                                xaxis_title="Participantes",
+                                font=dict(family="Questrial", size=12),
+                                plot_bgcolor="#ffffff",
+                                paper_bgcolor="#ffffff",
+                                margin=dict(t=50, b=40, l=160, r=30),
+                                height=350
+                            )
+                            st.plotly_chart(fig_top, use_container_width=True)
+
+                    # Indicador DC-3 donut
+                    st.markdown("#### 📜 Cobertura de Constancias DC-3 (STPS)")
+                    if "DCIII" in df_cursos_acc.columns:
+                        con_dc3 = df_cursos_acc["DCIII"].apply(
+                            lambda x: _limpiar_texto(x) not in ("", "None", "nan")).sum()
+                        sin_dc3 = len(df_cursos_acc) - con_dc3
+                        pct_dc3 = (con_dc3 / len(df_cursos_acc) * 100) if len(df_cursos_acc) > 0 else 0
+
+                        dc1, dc2, dc3 = st.columns([1, 2, 1])
+                        with dc2:
+                            fig_dc3 = go.Figure(data=[go.Pie(
+                                labels=["Con DC-3", "Sin DC-3"],
+                                values=[con_dc3, sin_dc3],
+                                hole=0.7,
+                                marker=dict(colors=["#EC2024", "#e0e0e0"]),
+                                textinfo="label+percent",
+                                hoverinfo="label+value"
+                            )])
+                            fig_dc3.update_layout(
+                                title=dict(
+                                    text=f"<b>Cobertura DC-3: {pct_dc3:.1f}%</b>",
+                                    x=0.5, y=0.02, xanchor="center",
+                                    font=dict(size=15)
+                                ),
+                                showlegend=True,
+                                font=dict(family="Questrial"),
+                                height=320,
+                                margin=dict(t=20, b=60, l=20, r=20),
+                                annotations=[dict(
+                                    text=f"<b>{int(pct_dc3)}%</b>",
+                                    x=0.5, y=0.5, font=dict(size=26), showarrow=False
+                                )]
+                            )
+                            st.plotly_chart(fig_dc3, use_container_width=True)
+
+                    # Tabla resumen de horas por curso con promedio
+                    st.markdown("#### 📋 Resumen por Curso")
+                    if "Nombre_del_Curso" in df_cursos_acc.columns and "Horas_Invertidas" in df_cursos_acc.columns:
+                        df_resumen = df_cursos_acc.copy()
+                        df_resumen["Horas_Invertidas"] = pd.to_numeric(
+                            df_resumen["Horas_Invertidas"], errors="coerce").fillna(0)
+                        resumen_tab = (
+                            df_resumen.groupby("Nombre_del_Curso")
+                            .agg(
+                                Participantes=("Empleado", "count"),
+                                Horas_Total=("Horas_Invertidas", "sum"),
+                                Horas_Promedio=("Horas_Invertidas", "mean")
+                            )
+                            .reset_index()
+                            .sort_values("Horas_Total", ascending=False)
+                        )
+                        resumen_tab["Horas_Promedio"] = resumen_tab["Horas_Promedio"].round(1)
+                        st.dataframe(
+                            resumen_tab.rename(columns={
+                                "Nombre_del_Curso": "Curso",
+                                "Participantes": "# Participantes",
+                                "Horas_Total": "Horas Totales",
+                                "Horas_Promedio": "Horas Promedio"
+                            }),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+
+            # ─────────────────────────────────────────────
+            # SUB-TAB 4: CATÁLOGOS INSTITUCIONALES
+            # ─────────────────────────────────────────────
+            with sub_catalogos:
+                st.subheader("📋 Catálogos Institucionales de Sigrama")
+
+                cat1, cat2 = st.columns(2)
+
+                with cat1:
+                    st.markdown("#### 🏷️ Puestos y Disciplinas")
+                    if df_puestos_acc.empty:
+                        st.info("No hay puestos disponibles en la base de datos.")
+                    else:
+                        for _, row in df_puestos_acc.iterrows():
+                            val = _limpiar_texto(row.iloc[0])
+                            if val:
+                                st.markdown(
+                                    f'<div style="padding:8px 14px; margin-bottom:6px; '
+                                    f'background:#f8f9fa; border-left:3px solid #EC2024; '
+                                    f'border-radius:4px; font-family:Questrial; font-size:14px;">'
+                                    f'💼 {val}</div>',
+                                    unsafe_allow_html=True
+                                )
+
+                with cat2:
+                    st.markdown("#### 📖 Cursos Disponibles en Sigrama")
+                    if df_cursos_cat.empty:
+                        st.info("No hay cursos disponibles en la base de datos.")
+                    else:
+                        for _, row in df_cursos_cat.iterrows():
+                            val = _limpiar_texto(row.iloc[0])
+                            if val:
+                                st.markdown(
+                                    f'<div style="padding:8px 14px; margin-bottom:6px; '
+                                    f'background:#f8f9fa; border-left:3px solid #111111; '
+                                    f'border-radius:4px; font-family:Questrial; font-size:14px;">'
+                                    f'🎓 {val}</div>',
+                                    unsafe_allow_html=True
+                                )
