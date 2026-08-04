@@ -2295,6 +2295,281 @@ def _calcular_saldo(df_txt: pd.DataFrame, id_emp: str) -> float:
     return round(cargas - descargas, 2)
 
 
+def generar_pdf_fo_rhu_22(incidencia: dict, df_txt: pd.DataFrame, df_personal: pd.DataFrame) -> io.BytesIO:
+    """
+    Genera el formato físico de firma FO-RHU-22 en PDF con:
+    1. Encabezado corporativo Industria SIGRAMA (FO-RHU-22)
+    2. Datos completos de la Incidencia / Permiso
+    3. Sección para Firmas Físicas (Solicitante, Jefe Inmediato, RH)
+    4. Historial completo del colaborador y Estado de Cuenta del Banco TxT al final.
+    """
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=letter,
+        rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36
+    )
+    story = []
+    styles = getSampleStyleSheet()
+
+    # Estilos personalizados
+    primary_color = colors.HexColor("#C0392B")    # Rojo SIGRAMA
+    secondary_color = colors.HexColor("#2C3E50")  # Gris corporativo
+    bg_light = colors.HexColor("#F8F9FA")
+
+    title_style = ParagraphStyle(
+        'DocTitle', parent=styles['Heading1'], fontSize=15, leading=18,
+        textColor=primary_color, alignment=1, spaceAfter=2, fontName='Helvetica-Bold'
+    )
+    subtitle_style = ParagraphStyle(
+        'DocSubTitle', parent=styles['Normal'], fontSize=9, leading=11,
+        textColor=secondary_color, alignment=1, spaceAfter=8, fontName='Helvetica-Bold'
+    )
+    section_style = ParagraphStyle(
+        'SectionHeader', parent=styles['Heading2'], fontSize=10, leading=13,
+        textColor=colors.white, alignment=0, fontName='Helvetica-Bold'
+    )
+    normal_bold = ParagraphStyle(
+        'NormalBold', parent=styles['Normal'], fontSize=8.5, leading=11,
+        fontName='Helvetica-Bold', textColor=secondary_color
+    )
+    normal_text = ParagraphStyle(
+        'NormalText', parent=styles['Normal'], fontSize=8.5, leading=11,
+        fontName='Helvetica', textColor=colors.HexColor("#222222")
+    )
+    table_cell = ParagraphStyle(
+        'TableCell', parent=styles['Normal'], fontSize=7.5, leading=9.5,
+        fontName='Helvetica'
+    )
+    table_cell_bold = ParagraphStyle(
+        'TableCellBold', parent=styles['Normal'], fontSize=7.5, leading=9.5,
+        fontName='Helvetica-Bold', textColor=secondary_color
+    )
+
+    # 1. ENCABEZADO CORPORATIVO
+    ruta_banner = "RH BANNER APP.png"
+    if os.path.exists(ruta_banner):
+        try:
+            story.append(RLImage(ruta_banner, width=540, height=90))
+            story.append(Spacer(1, 6))
+        except Exception:
+            pass
+
+    story.append(Paragraph("INDUSTRIA SIGRAMA S.A. DE C.V.", title_style))
+    story.append(Paragraph("SOLICITUD Y CONTROL DE INCIDENCIAS TIEMPO POR TIEMPO (FO-RHU-22)", subtitle_style))
+    story.append(Spacer(1, 4))
+
+    # 2. DATOS DE LA INCIDENCIA
+    folio_val = str(incidencia.get("folio", "")).upper()
+    fecha_emision_val = str(incidencia.get("fecha_emision", ""))
+    id_emp_val = str(incidencia.get("id_empleado", "")).strip()
+    nombre_emp_val = str(incidencia.get("nombre_empleado", "")).strip()
+    tipo_val = str(incidencia.get("tipo", "")).upper()
+    horas_val = str(incidencia.get("horas", ""))
+    dias_val = str(incidencia.get("dias", ""))
+    f_inicio_val = str(incidencia.get("fecha_inicio", ""))
+    f_fin_val = str(incidencia.get("fecha_fin", ""))
+    causa_val = str(incidencia.get("causa", ""))
+    autoriza_val = str(incidencia.get("autoriza", ""))
+    periodo_val = str(incidencia.get("periodo", ""))
+    estatus_val = str(incidencia.get("estatus", "Aplicado"))
+
+    area_val = "N/A"
+    if df_personal is not None and not df_personal.empty and "id_empleado" in df_personal.columns:
+        emp_match = df_personal[df_personal["id_empleado"].astype(str).str.strip() == id_emp_val]
+        if not emp_match.empty and "area" in emp_match.columns:
+            area_val = str(emp_match.iloc[0]["area"])
+
+    # Encabezado Sección 1
+    t_sec1 = Table(
+        [[Paragraph("<b>I. DATOS DE LA INCIDENCIA Y COLABORADOR</b>", section_style)]],
+        colWidths=[540]
+    )
+    t_sec1.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), primary_color),
+        ('PADDING', (0,0), (-1,-1), 4),
+    ]))
+    story.append(t_sec1)
+    story.append(Spacer(1, 3))
+
+    tipo_badge = f"<font color='#2e7d32'><b>CARGA (+)</b> (Permiso / Ausencia)</font>" if tipo_val == "CARGA" else f"<font color='#c62828'><b>DESCARGA (-)</b> (Trabajo Extra / Compensación)</font>"
+
+    datos_mov = [
+        [
+            Paragraph("<b>Folio Incidencia:</b>", normal_bold), Paragraph(folio_val, normal_bold),
+            Paragraph("<b>Fecha Emisión:</b>", normal_bold), Paragraph(fecha_emision_val, normal_text)
+        ],
+        [
+            Paragraph("<b># Empleado:</b>", normal_bold), Paragraph(id_emp_val, normal_text),
+            Paragraph("<b>Colaborador:</b>", normal_bold), Paragraph(nombre_emp_val, normal_bold)
+        ],
+        [
+            Paragraph("<b>Área / Depto:</b>", normal_bold), Paragraph(area_val, normal_text),
+            Paragraph("<b>Periodo / Quincena:</b>", normal_bold), Paragraph(periodo_val, normal_text)
+        ],
+        [
+            Paragraph("<b>Tipo Movimiento:</b>", normal_bold), Paragraph(tipo_badge, normal_text),
+            Paragraph("<b>Horas Afectadas:</b>", normal_bold), Paragraph(f"<b>{horas_val} hrs</b>", normal_bold)
+        ],
+        [
+            Paragraph("<b>Días Afectados:</b>", normal_bold), Paragraph(f"{dias_val} día(s)", normal_text),
+            Paragraph("<b>Rango Fechas:</b>", normal_bold), Paragraph(f"Del {f_inicio_val} al {f_fin_val}", normal_text)
+        ],
+        [
+            Paragraph("<b>Autorizado Por:</b>", normal_bold), Paragraph(autoriza_val, normal_text),
+            Paragraph("<b>Estatus Actual:</b>", normal_bold), Paragraph(f"<b>{estatus_val}</b>", normal_text)
+        ],
+    ]
+    t_mov = Table(datos_mov, colWidths=[105, 165, 105, 165])
+    t_mov.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), bg_light),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#D5D8DC")),
+        ('PADDING', (0,0), (-1,-1), 3.5),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    story.append(t_mov)
+    story.append(Spacer(1, 4))
+
+    # Causa / Motivo
+    datos_causa = [
+        [Paragraph("<b>Causa / Justificación Detallada:</b>", normal_bold)],
+        [Paragraph(causa_val if causa_val else "Sin observación especificada", normal_text)]
+    ]
+    t_causa = Table(datos_causa, colWidths=[540])
+    t_causa.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.white),
+        ('BOX', (0,0), (-1,-1), 0.8, secondary_color),
+        ('PADDING', (0,0), (-1,-1), 5),
+    ]))
+    story.append(t_causa)
+    story.append(Spacer(1, 12))
+
+    # 3. FIRMAS FÍSICAS
+    t_sec2 = Table(
+        [[Paragraph("<b>II. FIRMAS DE CONFORMIDAD Y AUTORIZACIÓN PARA ARCHIVO FÍSICO</b>", section_style)]],
+        colWidths=[540]
+    )
+    t_sec2.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), secondary_color),
+        ('PADDING', (0,0), (-1,-1), 4),
+    ]))
+    story.append(t_sec2)
+    story.append(Spacer(1, 18))
+
+    firmas_data = [
+        [
+            Paragraph("__________________________________<br/><b>Firma del Colaborador</b><br/><font size=7 color='#666666'>(Solicitante)</font>", ParagraphStyle('F1', parent=normal_text, alignment=1)),
+            Paragraph("__________________________________<br/><b>Firma de Autorización</b><br/><font size=7 color='#666666'>(Jefe Inmediato / Gerencia)</font>", ParagraphStyle('F2', parent=normal_text, alignment=1)),
+            Paragraph("__________________________________<br/><b>Firma de Conformidad</b><br/><font size=7 color='#666666'>(Recursos Humanos / Prenómina)</font>", ParagraphStyle('F3', parent=normal_text, alignment=1)),
+        ]
+    ]
+    t_firmas = Table(firmas_data, colWidths=[180, 180, 180])
+    t_firmas.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'BOTTOM'),
+        ('PADDING', (0,0), (-1,-1), 2),
+    ]))
+    story.append(t_firmas)
+    story.append(Spacer(1, 14))
+
+    # 4. HISTORIAL COMPLETO / ESTADO DE CUENTA
+    t_sec3 = Table(
+        [[Paragraph("<b>III. ESTADO DE CUENTA Y HISTORIAL ACUMULADO BANCO DE TIEMPO POR TIEMPO</b>", section_style)]],
+        colWidths=[540]
+    )
+    t_sec3.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#16A085")),
+        ('PADDING', (0,0), (-1,-1), 4),
+    ]))
+    story.append(t_sec3)
+    story.append(Spacer(1, 4))
+
+    df_emp_hist = pd.DataFrame()
+    if df_txt is not None and not df_txt.empty and "id_empleado" in df_txt.columns:
+        df_emp_hist = df_txt[
+            (df_txt["id_empleado"].astype(str).str.strip() == id_emp_val) &
+            (df_txt["estatus"].astype(str).str.strip().str.lower() != "cancelado")
+        ].copy()
+
+    if df_emp_hist.empty:
+        story.append(Paragraph("<i>No se registran otros movimientos en el sistema.</i>", normal_text))
+    else:
+        df_emp_hist["horas_num"] = pd.to_numeric(df_emp_hist["horas"], errors="coerce").fillna(0)
+        
+        headers_hist = [
+            Paragraph("<b>Folio</b>", table_cell_bold),
+            Paragraph("<b>F. Emisión</b>", table_cell_bold),
+            Paragraph("<b>Tipo</b>", table_cell_bold),
+            Paragraph("<b>Horas</b>", table_cell_bold),
+            Paragraph("<b>Fechas Apl.</b>", table_cell_bold),
+            Paragraph("<b>Causa / Justificación</b>", table_cell_bold),
+            Paragraph("<b>Saldo Acum.</b>", table_cell_bold)
+        ]
+        rows_hist = [headers_hist]
+        
+        saldo_acum = 0.0
+        for _, r in df_emp_hist.iterrows():
+            f_fol = str(r.get("folio", ""))
+            f_fec = str(r.get("fecha_emision", ""))
+            f_tip = str(r.get("tipo", "")).upper()
+            f_hrs = float(r.get("horas_num", 0))
+            f_ran = f"{r.get('fecha_inicio', '')}"
+            f_cau = str(r.get("causa", ""))
+            
+            if f_tip == "CARGA":
+                saldo_acum += f_hrs
+                tip_str = f"<font color='#2e7d32'>+ {f_hrs:.1f} hrs (CARGA)</font>"
+            else:
+                saldo_acum -= f_hrs
+                tip_str = f"<font color='#c62828'>- {f_hrs:.1f} hrs (DESCARGA)</font>"
+
+            s_color = "#2e7d32" if saldo_acum >= 0 else "#c62828"
+            
+            rows_hist.append([
+                Paragraph(f_fol, table_cell),
+                Paragraph(f_fec, table_cell),
+                Paragraph(tip_str, table_cell),
+                Paragraph(f"{f_hrs:.1f} h", table_cell),
+                Paragraph(f_ran, table_cell),
+                Paragraph(f_cau[:45] + ("..." if len(f_cau) > 45 else ""), table_cell),
+                Paragraph(f"<font color='{s_color}'><b>{saldo_acum:+.1f} hrs</b></font>", table_cell)
+            ])
+
+        t_hist_table = Table(rows_hist, colWidths=[65, 58, 82, 45, 65, 145, 80])
+        t_hist_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor("#EAEDED")),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#BDC3C7")),
+            ('PADDING', (0,0), (-1,-1), 2.5),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        story.append(t_hist_table)
+        story.append(Spacer(1, 6))
+
+        # Saldo Final
+        sal_color = "#2e7d32" if saldo_acum >= 0 else "#c62828"
+        t_res_saldo = Table([
+            [
+                Paragraph(f"<b>SALDO FINAL VIGENTE EN BANCO TXT PARA {nombre_emp_val.upper()}:</b>", normal_bold),
+                Paragraph(f"<font size=11 color='{sal_color}'><b>{saldo_acum:+.2f} HORAS</b></font>", ParagraphStyle('SalFin', parent=normal_bold, alignment=2))
+            ]
+        ], colWidths=[370, 170])
+        t_res_saldo.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F2F4F4")),
+            ('BOX', (0,0), (-1,-1), 1, colors.HexColor(sal_color)),
+            ('PADDING', (0,0), (-1,-1), 5),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ]))
+        story.append(t_res_saldo)
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
 with tab_txt:
     # ── Banner institucional ──────────────────────────────────────────────────
     st.markdown("""
@@ -2344,6 +2619,20 @@ with tab_txt:
             st.warning("🔒 Solo el Administrador puede registrar incidencias TxT.")
         else:
             st.subheader("📋 Nueva Incidencia — Solicitud de Permisos FO-RHU-22")
+
+            if "ultimo_txt_registrado" in st.session_state:
+                ult = st.session_state["ultimo_txt_registrado"]
+                st.success(f"✅ Incidencia **{ult.get('folio')}** registrada correctamente para **{ult.get('nombre_empleado')}** ({ult.get('horas')} hrs).")
+                pdf_ult_bytes = generar_pdf_fo_rhu_22(ult, df_txt_data, df_personal_base)
+                st.download_button(
+                    label=f"📄 Descargar Formato PDF de Firma (FO-RHU-22) — Folio {ult.get('folio')}",
+                    data=pdf_ult_bytes,
+                    file_name=f"FO-RHU-22_{ult.get('folio')}_{ult.get('id_empleado')}.pdf",
+                    mime="application/pdf",
+                    type="primary",
+                    key="btn_dl_ult_pdf"
+                )
+                st.markdown("---")
 
             # Selector de colaborador
             if df_personal_base.empty:
@@ -2484,13 +2773,7 @@ with tab_txt:
                         ok = guardar_banco_txt(df_txt_data)
                         st.cache_data.clear()
                         if ok:
-                            signo = "+" if tipo_val == "CARGA" else "-"
-                            nuevo_saldo = _calcular_saldo(df_txt_data, id_emp_sel)
-                            st.success(
-                                f"✅ Incidencia **{folio_inp.upper()}** registrada correctamente. "
-                                f"Movimiento: **{signo}{horas_inp:.1f} hrs**. "
-                                f"Nuevo saldo de **{nom_emp_sel}**: **{nuevo_saldo:.2f} hrs**"
-                            )
+                            st.session_state["ultimo_txt_registrado"] = nuevo_registro
                             st.rerun()
                         else:
                             st.error("❌ Error al guardar el archivo. Verifique permisos de escritura.")
@@ -2697,6 +2980,46 @@ with tab_txt:
                 key="dl_saldo_txt"
             )
 
+            # ── Estado de Cuenta PDF por colaborador ──────────────────────
+            st.markdown("---")
+            st.markdown("#### 📄 Imprimir Estado de Cuenta y Formato de Firma (PDF)")
+            col_pdf_c1, col_pdf_c2 = st.columns([3, 1])
+            with col_pdf_c1:
+                emps_opts_pdf = [f"{r['# Empleado']} — {r['Nombre']}" for _, r in df_todos.iterrows()]
+                sel_emp_pdf = st.selectbox("Selecciona Colaborador para generar Estado de Cuenta en PDF:", emps_opts_pdf, key="pdf_emp_banco_sel")
+            with col_pdf_c2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                id_emp_pdf_sel = sel_emp_pdf.split(" — ")[0].strip()
+                nom_emp_pdf_sel = sel_emp_pdf.split(" — ")[1].strip()
+                df_emp_movs = df_txt_data[df_txt_data["id_empleado"].astype(str).str.strip() == id_emp_pdf_sel] if not df_txt_data.empty else pd.DataFrame()
+                if not df_emp_movs.empty:
+                    ult_inc = df_emp_movs.iloc[-1].to_dict()
+                else:
+                    ult_inc = {
+                        "folio": f"ESTADO-CUENTA-{id_emp_pdf_sel}",
+                        "fecha_emision": str(datetime.now().date()),
+                        "id_empleado": id_emp_pdf_sel,
+                        "nombre_empleado": nom_emp_pdf_sel,
+                        "tipo": "CARGA",
+                        "dias": "0",
+                        "fecha_inicio": str(datetime.now().date()),
+                        "fecha_fin": str(datetime.now().date()),
+                        "horas": "0.0",
+                        "causa": "ESTADO DE CUENTA GENERAL DEL BANCO DE TIEMPO POR TIEMPO",
+                        "periodo": "VIGENTE",
+                        "autoriza": "RECURSOS HUMANOS",
+                        "estatus": "Vigente"
+                    }
+                pdf_banco_bytes = generar_pdf_fo_rhu_22(ult_inc, df_txt_data, df_personal_base)
+                st.download_button(
+                    label=f"📄 Descargar PDF ({id_emp_pdf_sel})",
+                    data=pdf_banco_bytes,
+                    file_name=f"EstadoCuenta_TxT_{id_emp_pdf_sel}.pdf",
+                    mime="application/pdf",
+                    type="primary",
+                    key=f"btn_dl_banco_{id_emp_pdf_sel}"
+                )
+
 
     # ════════════════════════════════════════════════════════════════════════
     # SUB-TAB 3: HISTORIAL DE INCIDENCIAS
@@ -2749,6 +3072,34 @@ with tab_txt:
                 use_container_width=True,
                 hide_index=True
             )
+
+            # Generación de PDF por Folio (FO-RHU-22)
+            st.markdown("---")
+            st.markdown("#### 📄 Imprimir Formato FO-RHU-22 en PDF (Firma Física + Historial)")
+            folios_hist = sorted(df_hist_view["folio"].unique().tolist()) if not df_hist_view.empty else []
+            if folios_hist:
+                col_pdf1, col_pdf2 = st.columns([3, 1])
+                with col_pdf1:
+                    folio_pdf_sel = st.selectbox(
+                        "Selecciona el Folio de Incidencia a imprimir en PDF:",
+                        folios_hist,
+                        key="hist_pdf_sel_folio"
+                    )
+                with col_pdf2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if folio_pdf_sel:
+                        match_row = df_txt_data[df_txt_data["folio"] == folio_pdf_sel]
+                        if not match_row.empty:
+                            inc_dict = match_row.iloc[0].to_dict()
+                            pdf_bytes_hist = generar_pdf_fo_rhu_22(inc_dict, df_txt_data, df_personal_base)
+                            st.download_button(
+                                label=f"📄 Descargar PDF {folio_pdf_sel}",
+                                data=pdf_bytes_hist,
+                                file_name=f"FO-RHU-22_{folio_pdf_sel}.pdf",
+                                mime="application/pdf",
+                                type="primary",
+                                key=f"btn_dl_hist_{folio_pdf_sel}"
+                            )
 
             # Cancelar incidencia (solo Admin)
             if st.session_state.get("usuario_rol") == "Administrador":
