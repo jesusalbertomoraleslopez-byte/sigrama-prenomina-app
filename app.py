@@ -1533,7 +1533,12 @@ with tab_historico:
             df_m['Fecha_Clean'] = pd.to_datetime(df_m['Fecha_Clean']).dt.date
             
             # Mapeamos primeras fechas de reloj
-            primeros_ingresos = df_m.groupby('#Empleado')['Fecha_Clean'].min().to_dict()
+            primeros_ingresos = (
+                df_m.dropna(subset=['Fecha_Clean'])
+                .groupby('#Empleado')['Fecha_Clean']
+                .min()
+                .to_dict()
+            )
             unique_dates = sorted(df_m['Fecha_Clean'].dropna().unique())
             
             # Agrupamos por semana ISO
