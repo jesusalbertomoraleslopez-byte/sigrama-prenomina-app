@@ -398,7 +398,12 @@ def recalcular_historico_completo(ruta_dir_asistencias, archivo_personal_path, l
     unique_dates = sorted(df_m['Fecha_Clean'].dropna().unique())
     
     # Mapear la fecha del primer registro/ingreso de cada empleado en los archivos cargados
-    primeros_ingresos = df_m.groupby('#Empleado')['Fecha_Clean'].min().to_dict()
+    primeros_ingresos = (
+        df_m.dropna(subset=['Fecha_Clean'])
+        .groupby('#Empleado')['Fecha_Clean']
+        .min()
+        .to_dict()
+    )
     
     semanas_agrupadas = {}
     for d in unique_dates:
@@ -2532,7 +2537,7 @@ with tab_txt:
                 except Exception:
                     return ""
 
-            styled_saldo = df_saldo_view.style.applymap(
+            styled_saldo = df_saldo_view.style.map(
                 _color_saldo_col, subset=["Saldo Actual (hrs)"]
             )
             st.dataframe(styled_saldo, use_container_width=True, hide_index=True)
