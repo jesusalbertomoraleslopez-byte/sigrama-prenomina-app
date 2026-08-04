@@ -2496,14 +2496,15 @@ with tab_txt:
                             st.error("❌ Error al guardar el archivo. Verifique permisos de escritura.")
 
     # ════════════════════════════════════════════════════════════════════════
-    # SUB-TAB 2: BANCO POR COLABORADOR
+    # SUB-TAB 2: BANCO POR COLABORADOR — DASHBOARD VISUAL
     # ════════════════════════════════════════════════════════════════════════
     with txt_saldo:
-        st.subheader("📊 Saldo de Horas TxT por Colaborador")
+        st.subheader("📊 Banco de Horas TxT — Vista por Colaborador")
 
         if df_personal_base.empty:
             st.info("No hay colaboradores registrados en el catálogo de personal.")
         else:
+            # ── Construir tabla de saldos ─────────────────────────────────
             filas_saldo = []
             for _, row_p in df_personal_base.iterrows():
                 id_e   = str(row_p.get("id_empleado", "")).strip()
@@ -2516,23 +2517,162 @@ with tab_txt:
                     (df_txt_data["estatus"].str.strip().str.lower() != "cancelado")
                 ] if not df_txt_data.empty else pd.DataFrame()
 
-                cargas_e   = pd.to_numeric(df_emp_mov[df_emp_mov["tipo"] == "CARGA"]["horas"],    errors="coerce").fillna(0).sum() if not df_emp_mov.empty else 0
+                cargas_e    = pd.to_numeric(df_emp_mov[df_emp_mov["tipo"] == "CARGA"]["horas"],    errors="coerce").fillna(0).sum() if not df_emp_mov.empty else 0
                 descargas_e = pd.to_numeric(df_emp_mov[df_emp_mov["tipo"] == "DESCARGA"]["horas"], errors="coerce").fillna(0).sum() if not df_emp_mov.empty else 0
-                num_inc_e  = len(df_emp_mov)
+                num_inc_e   = len(df_emp_mov)
 
                 filas_saldo.append({
-                    "# Empleado":    id_e,
-                    "Nombre":        nom_e,
-                    "Área":          area_e,
+                    "# Empleado":           id_e,
+                    "Nombre":               nom_e,
+                    "Área":                 area_e,
                     "Horas Cargadas (+)":   round(cargas_e, 2),
                     "Horas Descargadas (-)": round(descargas_e, 2),
                     "Saldo Actual (hrs)":   saldo,
-                    "# Incidencias":  num_inc_e
+                    "# Incidencias":        num_inc_e
                 })
 
             df_saldo_view = pd.DataFrame(filas_saldo)
 
-            # Resaltar con colores
+            # ── GRÁFICA PRINCIPAL: Barras agrupadas Carga / Descarga / Saldo ──
+            st.markdown("#### 📊 Comparativa General — Horas por Colaborador")
+            # Filtrar solo empleados con al menos algún movimiento
+            df_con_mov = df_saldo_view[df_saldo_view["# Incidencias"] > 0].copy()
+            df_todos   = df_saldo_view.copy()  # para la tabla siempre mostramos todos
+
+            if df_con_mov.empty:
+                st.info("⏳ Aún no hay movimientos registrados. Usa **Registrar Incidencia** para comenzar.")
+            else:
+                nombres_graf = df_con_mov["Nombre"].tolist()
+                cargas_graf  = df_con_mov["Horas Cargadas (+)"].tolist()
+                desc_graf    = df_con_mov["Horas Descargadas (-)"].tolist()
+                saldo_graf   = df_con_mov["Saldo Actual (hrs)"].tolist()
+
+                fig_grupo = go.Figure()
+                fig_grupo.add_trace(go.Bar(
+                    name="➕ Horas Cargadas (Permisos)",
+                    x=nombres_graf,
+                    y=cargas_graf,
+                    marker_color="#2e7d32",
+                    text=[f"+{v:.1f}" for v in cargas_graf],
+                    textposition="outside",
+                    offsetgroup=0
+                ))
+                fig_grupo.add_trace(go.Bar(
+                    name="➖ Horas Descargadas (Extras)",
+                    x=nombres_graf,
+                    y=desc_graf,
+                    marker_color="#c62828",
+                    text=[f"-{v:.1f}" for v in desc_graf],
+                    textposition="outside",
+                    offsetgroup=1
+                ))
+                fig_grupo.add_trace(go.Bar(
+                    name="⚖️ Saldo Neto",
+                    x=nombres_graf,
+                    y=saldo_graf,
+                    marker_color=["#e65100" if v >= 0 else "#b71c1c" for v in saldo_graf],
+                    text=[f"{v:+.1f}" for v in saldo_graf],
+                    textposition="outside",
+                    offsetgroup=2
+                ))
+                fig_grupo.update_layout(
+                    barmode="group",
+                    title=dict(text="<b>Banco TxT — Carga vs Descarga vs Saldo Neto</b>", x=0.5, xanchor="center", font=dict(size=15)),
+                    xaxis_title="Colaborador",
+                    yaxis_title="Horas",
+                    font=dict(family="Questrial", size=13),
+                    plot_bgcolor="#fafafa",
+                    paper_bgcolor="#ffffff",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+                    margin=dict(t=80, b=60, l=40, r=20),
+                    height=420,
+                    shapes=[dict(
+                        type="line", x0=-0.5, x1=len(nombres_graf) - 0.5,
+                        y0=0, y1=0,
+                        line=dict(color="#333", width=1.5, dash="dash")
+                    )]
+                )
+                st.plotly_chart(fig_grupo, use_container_width=True)
+
+            # ── TARJETAS INDIVIDUALES por empleado con incidencias ────────────
+            st.markdown("---")
+            st.markdown("#### 🃏 Tarjetas de Saldo Individual")
+
+            if df_con_mov.empty:
+                st.info("Sin tarjetas que mostrar — no hay empleados con incidencias registradas.")
+            else:
+                # Máximo de cargas para normalizar barra de progreso
+                max_carga = max(df_con_mov["Horas Cargadas (+)"].max(), 1)
+
+                cols_cards = st.columns(min(3, len(df_con_mov)))
+                for idx, (_, fila_c) in enumerate(df_con_mov.iterrows()):
+                    col_idx = idx % 3
+                    nom     = fila_c["Nombre"]
+                    saldo_c = fila_c["Saldo Actual (hrs)"]
+                    cargas_c  = fila_c["Horas Cargadas (+)"]
+                    desc_c    = fila_c["Horas Descargadas (-)"]
+                    inc_c   = int(fila_c["# Incidencias"])
+                    area_c  = fila_c["Área"]
+
+                    # Color según saldo
+                    if saldo_c > 0:
+                        borde_color = "#2e7d32"
+                        signo_icon  = "🟢"
+                        saldo_color = "#2e7d32"
+                    elif saldo_c < 0:
+                        borde_color = "#c62828"
+                        signo_icon  = "🔴"
+                        saldo_color = "#c62828"
+                    else:
+                        borde_color = "#888"
+                        signo_icon  = "⚪"
+                        saldo_color = "#555"
+
+                    # Barra de progreso visual (porcentaje de cargas usadas)
+                    pct_usado = min((desc_c / cargas_c * 100) if cargas_c > 0 else 0, 100)
+                    bar_filled = int(pct_usado / 5)   # 20 bloques totales
+                    bar_empty  = 20 - bar_filled
+                    bar_str    = "█" * bar_filled + "░" * bar_empty
+
+                    cols_cards[col_idx].markdown(f"""
+<div style="background:#ffffff; border:2px solid {borde_color};
+            border-radius:12px; padding:18px 20px; margin-bottom:16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);">
+    <div style="font-family:'Montserrat',sans-serif; font-weight:700;
+                font-size:14px; color:#111; margin-bottom:4px;">
+        {signo_icon} {nom}
+    </div>
+    <div style="font-family:'Questrial',sans-serif; font-size:12px;
+                color:#888; margin-bottom:12px;">{area_c}</div>
+    <div style="font-size:30px; font-weight:800; color:{saldo_color};
+                font-family:'Montserrat',sans-serif; margin-bottom:8px;">
+        {saldo_c:+.1f} hrs
+    </div>
+    <div style="font-family:monospace; font-size:11px; color:{borde_color};
+                letter-spacing:1px; margin-bottom:10px;" title="{pct_uso:.0f}% de horas usadas">
+        {bar_str} {pct_usado:.0f}%
+    </div>
+    <div style="display:flex; gap:12px;">
+        <div style="background:#e8f5e9; border-radius:6px; padding:6px 10px;
+                    font-size:12px; color:#2e7d32; font-family:'Questrial',sans-serif;">
+            ➕ Cargadas: <b>{cargas_c:.1f} hrs</b>
+        </div>
+        <div style="background:#ffebee; border-radius:6px; padding:6px 10px;
+                    font-size:12px; color:#c62828; font-family:'Questrial',sans-serif;">
+            ➖ Usadas: <b>{desc_c:.1f} hrs</b>
+        </div>
+    </div>
+    <div style="margin-top:8px; font-size:11px; color:#aaa;
+                font-family:'Questrial',sans-serif;">
+        📋 {inc_c} incidencia(s) registrada(s)
+    </div>
+</div>
+""".replace("{pct_uso:.0f}", f"{pct_usado:.0f}"), unsafe_allow_html=True)
+
+            # ── Tabla resumen y descarga ──────────────────────────────────
+            st.markdown("---")
+            st.markdown("#### 📋 Tabla Resumen Completa")
+
             def _color_saldo_col(val):
                 try:
                     v = float(val)
@@ -2542,14 +2682,13 @@ with tab_txt:
                 except Exception:
                     return ""
 
-            styled_saldo = df_saldo_view.style.map(
+            styled_saldo = df_todos.style.map(
                 _color_saldo_col, subset=["Saldo Actual (hrs)"]
             )
             st.dataframe(styled_saldo, use_container_width=True, hide_index=True)
 
-            # Descarga del resumen
             buf_saldo = io.BytesIO()
-            df_saldo_view.to_excel(buf_saldo, index=False)
+            df_todos.to_excel(buf_saldo, index=False)
             buf_saldo.seek(0)
             st.download_button(
                 "⬇️ Descargar Resumen Banco TxT (.xlsx)",
@@ -2559,36 +2698,6 @@ with tab_txt:
                 key="dl_saldo_txt"
             )
 
-            # Gráfica de barras de saldo
-            if not df_saldo_view.empty and df_saldo_view["Saldo Actual (hrs)"].sum() != 0:
-                st.markdown("#### 📊 Comparativa de Saldos")
-                colores_barras = [
-                    "#2e7d32" if v >= 0 else "#c62828"
-                    for v in df_saldo_view["Saldo Actual (hrs)"]
-                ]
-                fig_saldo = go.Figure(go.Bar(
-                    x=df_saldo_view["Nombre"],
-                    y=df_saldo_view["Saldo Actual (hrs)"],
-                    marker_color=colores_barras,
-                    text=[f"{v:.1f}" for v in df_saldo_view["Saldo Actual (hrs)"]],
-                    textposition="outside"
-                ))
-                fig_saldo.update_layout(
-                    title="Saldo de Horas TxT por Colaborador",
-                    xaxis_title="Colaborador",
-                    yaxis_title="Horas",
-                    font=dict(family="Questrial", size=13),
-                    plot_bgcolor="#ffffff",
-                    paper_bgcolor="#ffffff",
-                    margin=dict(t=50, b=80, l=40, r=20),
-                    height=350,
-                    shapes=[dict(
-                        type="line", x0=-0.5, x1=len(df_saldo_view)-0.5,
-                        y0=0, y1=0,
-                        line=dict(color="#111", width=1.5, dash="dash")
-                    )]
-                )
-                st.plotly_chart(fig_saldo, use_container_width=True)
 
     # ════════════════════════════════════════════════════════════════════════
     # SUB-TAB 3: HISTORIAL DE INCIDENCIAS
