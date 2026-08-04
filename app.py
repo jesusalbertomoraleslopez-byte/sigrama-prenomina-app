@@ -2649,7 +2649,7 @@ with tab_txt:
         {saldo_c:+.1f} hrs
     </div>
     <div style="font-family:monospace; font-size:11px; color:{borde_color};
-                letter-spacing:1px; margin-bottom:10px;" title="{pct_uso:.0f}% de horas usadas">
+                letter-spacing:1px; margin-bottom:10px;" title="{pct_usado:.0f}% de horas usadas">
         {bar_str} {pct_usado:.0f}%
     </div>
     <div style="display:flex; gap:12px;">
@@ -2666,8 +2666,7 @@ with tab_txt:
                 font-family:'Questrial',sans-serif;">
         📋 {inc_c} incidencia(s) registrada(s)
     </div>
-</div>
-""".replace("{pct_uso:.0f}", f"{pct_usado:.0f}"), unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
             # ── Tabla resumen y descarga ──────────────────────────────────
             st.markdown("---")
