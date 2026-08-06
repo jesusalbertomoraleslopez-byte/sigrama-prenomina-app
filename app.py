@@ -2495,9 +2495,15 @@ def generar_pdf_fo_rhu_22(incidencia: dict, df_txt: pd.DataFrame, df_personal: p
             (df_txt["estatus"].astype(str).str.strip().str.lower() != "cancelado")
         ].copy()
 
-    if df_emp_hist.empty:
-        story.append(Paragraph("<i>No se registran otros movimientos en el sistema.</i>", normal_text))
-    else:
+    # Si la incidencia actual no está en el historial (ej. borrador o registro nuevo), la agregamos
+    inc_folio = str(incidencia.get("folio", "")).strip().upper()
+    ya_existe = False
+    if not df_emp_hist.empty and "folio" in df_emp_hist.columns:
+        if inc_folio in df_emp_hist["folio"].astype(str).str.strip().str.upper().values:
+            ya_existe = True
+
+    if not ya_existe:
+        df_emp_hist = pd.concat([df_emp_hist, pd.DataFrame([incidencia])], ignore_index=True)
         df_emp_hist["horas_num"] = pd.to_numeric(df_emp_hist["horas"], errors="coerce").fillna(0)
         
         headers_hist = [
