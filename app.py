@@ -3141,45 +3141,67 @@ with tab_txt:
                                 key=f"btn_dl_hist_{folio_pdf_sel}"
                             )
 
-            # Cancelar incidencia (solo Admin)
+            # Gestor de Cancelación y Borrado de Incidencias (solo Admin)
             if st.session_state.get("usuario_rol") == "Administrador":
                 st.markdown("---")
-                st.markdown("#### 🗑️ Cancelar una Incidencia")
-                folios_act = df_txt_data[
-                    df_txt_data["estatus"].str.strip().str.lower() != "cancelado"
-                ]["folio"].tolist()
+                st.markdown("#### 🗑️ Cancelar o Eliminar Registro / Duplicado de Incidencia")
+                
+                if not df_txt_data.empty:
+                    opts_elim = []
+                    for idx_r, r_r in df_txt_data.iterrows():
+                        opts_elim.append(
+                            f"ID #{idx_r} | {r_r.get('folio')} — {r_r.get('nombre_empleado')} ({r_r.get('horas')} hrs) [{r_r.get('estatus')}]"
+                        )
+                    
+                    c_del1, c_del2 = st.columns([3, 2])
+                    with c_del1:
+                        sel_item_del = st.selectbox(
+                            "Selecciona la incidencia a procesar:",
+                            opts_elim,
+                            key="txt_item_del_sel"
+                        )
+                        idx_target = int(sel_item_del.split(" | ")[0].replace("ID #", "").strip())
 
-                if folios_act:
-                    folio_cancel = st.selectbox(
-                        "Selecciona el folio a cancelar:",
-                        folios_act,
-                        key="txt_cancel_sel"
-                    )
+                    with c_del2:
+                        accion_del = st.radio(
+                            "Acción a realizar:",
+                            ["📌 Marcar como Cancelado (Mantiene registro)", "🔥 Eliminar Definitivamente (Borrar Duplicado)"],
+                            key="txt_accion_del_radio"
+                        )
+
                     motivo_cancel = st.text_input(
-                        "Motivo de la cancelación:",
+                        "Motivo o Justificación (ej: Registro duplicado por error):",
                         key="txt_cancel_motivo"
                     )
-                    if st.button("🗑️ Cancelar Incidencia", key="txt_cancel_btn", type="secondary"):
-                        if not motivo_cancel.strip():
-                            st.error("❌ Debes indicar el motivo de la cancelación.")
-                        else:
-                            df_txt_data.loc[
-                                df_txt_data["folio"] == folio_cancel, "estatus"
-                            ] = "Cancelado"
-                            df_txt_data.loc[
-                                df_txt_data["folio"] == folio_cancel, "causa"
-                            ] = df_txt_data.loc[
-                                df_txt_data["folio"] == folio_cancel, "causa"
-                            ].astype(str) + f" [CANCELADO: {motivo_cancel.strip()}]"
-                            ok_cancel = guardar_banco_txt(df_txt_data)
-                            st.cache_data.clear()
-                            if ok_cancel:
-                                st.success(f"✅ Incidencia **{folio_cancel}** cancelada.")
-                                st.rerun()
+
+                    c_btn_a, c_btn_b = st.columns([2, 2])
+                    with c_btn_a:
+                        if st.button("⚠️ Procesar Incidencia", key="txt_exec_del_btn", type="secondary"):
+                            if "Eliminar Definitivamente" in accion_del:
+                                df_txt_data = df_txt_data.drop(index=idx_target).reset_index(drop=True)
+                                ok_del = guardar_banco_txt(df_txt_data)
+                                st.cache_data.clear()
+                                if ok_del:
+                                    st.success("✅ Registro eliminado por completo del sistema.")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ Error al guardar los cambios en la base de datos.")
                             else:
-                                st.error("❌ Error al guardar la cancelación.")
+                                if not motivo_cancel.strip():
+                                    st.error("❌ Debes indicar el motivo de la cancelación.")
+                                else:
+                                    df_txt_data.loc[idx_target, "estatus"] = "Cancelado"
+                                    causa_orig = str(df_txt_data.loc[idx_target, "causa"])
+                                    df_txt_data.loc[idx_target, "causa"] = f"{causa_orig} [CANCELADO: {motivo_cancel.strip()}]"
+                                    ok_cancel = guardar_banco_txt(df_txt_data)
+                                    st.cache_data.clear()
+                                    if ok_cancel:
+                                        st.success(f"✅ Incidencia marcada como Cancelada.")
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Error al guardar los cambios.")
                 else:
-                    st.info("No hay incidencias activas para cancelar.")
+                    st.info("No hay incidencias registradas en el sistema.")
 
             # Descarga del historial filtrado
             buf_hist = io.BytesIO()
