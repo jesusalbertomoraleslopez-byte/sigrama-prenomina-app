@@ -2622,16 +2622,24 @@ with tab_txt:
 
             if "ultimo_txt_registrado" in st.session_state:
                 ult = st.session_state["ultimo_txt_registrado"]
-                st.success(f"✅ Incidencia **{ult.get('folio')}** registrada correctamente para **{ult.get('nombre_empleado')}** ({ult.get('horas')} hrs).")
-                pdf_ult_bytes = generar_pdf_fo_rhu_22(ult, df_txt_data, df_personal_base)
-                st.download_button(
-                    label=f"📄 Descargar Formato PDF de Firma (FO-RHU-22) — Folio {ult.get('folio')}",
-                    data=pdf_ult_bytes,
-                    file_name=f"FO-RHU-22_{ult.get('folio')}_{ult.get('id_empleado')}.pdf",
-                    mime="application/pdf",
-                    type="primary",
-                    key="btn_dl_ult_pdf"
-                )
+                c_ult1, c_ult2 = st.columns([5, 1])
+                with c_ult1:
+                    st.success(f"✅ Incidencia **{ult.get('folio')}** registrada correctamente para **{ult.get('nombre_empleado')}** ({ult.get('horas')} hrs).")
+                    pdf_ult_bytes = generar_pdf_fo_rhu_22(ult, df_txt_data, df_personal_base)
+                    st.download_button(
+                        label=f"📄 DESCARGAR FORMATO PDF (FO-RHU-22) — Folio {ult.get('folio')} (Click para Imprimir)",
+                        data=pdf_ult_bytes,
+                        file_name=f"FO-RHU-22_{ult.get('folio')}_{ult.get('id_empleado')}.pdf",
+                        mime="application/pdf",
+                        type="primary",
+                        use_container_width=True,
+                        key="btn_dl_ult_pdf"
+                    )
+                with c_ult2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("✖️ Cerrar", key="close_ult_msg"):
+                        del st.session_state["ultimo_txt_registrado"]
+                        st.rerun()
                 st.markdown("---")
 
             # Selector de colaborador
@@ -2731,7 +2739,7 @@ with tab_txt:
                             f"¿Deseas continuar?"
                         )
 
-                col_btn1, col_btn2 = st.columns([3, 1])
+                col_btn1, col_btn2 = st.columns([1, 1])
                 with col_btn1:
                     guardar_btn = st.button(
                         "💾 Registrar Incidencia TxT",
@@ -2740,7 +2748,33 @@ with tab_txt:
                         key="txt_guardar_btn"
                     )
                 with col_btn2:
-                    st.markdown("<br>", unsafe_allow_html=True)
+                    # Generar PDF instantáneo con los datos actuales del formulario
+                    temp_inc_draft = {
+                        "folio":            folio_inp.strip().upper() if folio_inp.strip() else "TXT-FO-RHU-22",
+                        "fecha_emision":    str(fecha_emision_inp),
+                        "id_empleado":      id_emp_sel,
+                        "nombre_empleado":  nom_emp_sel,
+                        "tipo":             tipo_val,
+                        "dias":             str(num_dias_inp),
+                        "fecha_inicio":     str(fecha_inicio_inp),
+                        "fecha_fin":        str(fecha_fin_inp),
+                        "horas":            str(horas_inp),
+                        "causa":            causa_inp.strip() if causa_inp.strip() else "Solicitud de Permiso / Tiempo por Tiempo",
+                        "periodo":          periodo_inp.strip(),
+                        "autoriza":         autoriza_inp.strip(),
+                        "aplicado_en":      str(datetime.now().date()),
+                        "estatus":          "Pendiente de Firma"
+                    }
+                    pdf_draft_bytes = generar_pdf_fo_rhu_22(temp_inc_draft, df_txt_data, df_personal_base)
+                    st.download_button(
+                        label="📄 Imprimir Formato PDF (FO-RHU-22)",
+                        data=pdf_draft_bytes,
+                        file_name=f"FO-RHU-22_{temp_inc_draft['folio']}_{id_emp_sel}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        type="secondary",
+                        key="txt_pdf_direct_btn"
+                    )
 
                 if guardar_btn:
                     if not folio_inp.strip():
