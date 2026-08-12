@@ -1124,8 +1124,15 @@ with tab_reportes:
                     
                 matriz_final['PUNTUALIDAD'] = puntualidades
                 matriz_final['ASISTENCIA'] = asistencias
-                matriz_final['DESEMPEÑO'] = desempenos
-                matriz_final.columns = [str(c) for c in matriz_final.columns]
+                def _clean_col_name(c):
+                    try:
+                        v = float(c)
+                        if v == int(v):
+                            return str(int(v))
+                    except Exception:
+                        pass
+                    return str(c)
+                matriz_final.columns = [_clean_col_name(c) for c in matriz_final.columns]
                 
                 # Limpiamos los espacios en blanco del área
                 matriz_final['area'] = matriz_final['area'].fillna("⚪ Sin Asignar").astype(str).str.strip()
