@@ -1124,6 +1124,7 @@ with tab_reportes:
                     
                 matriz_final['PUNTUALIDAD'] = puntualidades
                 matriz_final['ASISTENCIA'] = asistencias
+                matriz_final['DESEMPEÑO'] = desempenos
                 def _clean_col_name(c):
                     try:
                         v = float(c)
