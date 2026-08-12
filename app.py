@@ -3211,6 +3211,27 @@ with tab_txt:
                 else:
                     st.info("No hay incidencias registradas en el sistema.")
 
+                # ── Sección de Limpieza Total del Banco TxT (Solo Admin) ─────
+                st.markdown("---")
+                with st.expander("🧹 Limpieza Total / Vaciar todo el Banco TxT (Solo Administrador)"):
+                    st.warning("⚠️ **ATENCIÓN:** Esta acción eliminará permanentemente TODOS los registros de Tiempo por Tiempo existentes en el sistema y reiniciará el saldo de todos los colaboradores a 0.0 hrs.")
+                    total_reg_actuales = len(df_txt_data)
+                    confirm_vaciar = st.checkbox(
+                        f"Confirmo que deseo borrar los {total_reg_actuales} registros del Banco TxT de forma irreversible.",
+                        key="chk_vaciar_txt"
+                    )
+                    if st.button("🔥 VACIAR Y LIMPIAR BANCO TXT COMPLETO", key="btn_vaciar_txt_total", type="primary", disabled=not confirm_vaciar):
+                        df_vacio = pd.DataFrame(columns=COLUMNAS_TXT)
+                        ok_vaciar = guardar_banco_txt(df_vacio)
+                        st.cache_data.clear()
+                        if "ultimo_txt_registrado" in st.session_state:
+                            del st.session_state["ultimo_txt_registrado"]
+                        if ok_vaciar:
+                            st.success("✅ Se han vaciado y eliminado correctamente todos los registros del Banco TxT.")
+                            st.rerun()
+                        else:
+                            st.error("❌ Error al intentar limpiar el archivo de base de datos.")
+
             # Descarga del historial filtrado
             buf_hist = io.BytesIO()
             df_hist_view.to_excel(buf_hist, index=False)
