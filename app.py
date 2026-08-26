@@ -336,8 +336,35 @@ def limpiar_registro_hora(valor_celda):
         except:
             return valor_celda.time() if hasattr(valor_celda, 'time') else None
 
+RUTA_RED_RELOJ = r"Q:\005 - Prenomina\Reloj"
+
+def sincronizar_archivos_red(dir_destino="asistencias") -> int:
+    """
+    Sincroniza automáticamente los archivos .xls desde la ruta de red
+    Q:\\005 - Prenomina\\Reloj hacia la carpeta de asistencias si la ruta de red está disponible.
+    """
+    if os.path.exists(RUTA_RED_RELOJ):
+        try:
+            os.makedirs(dir_destino, exist_ok=True)
+            archivos_red = glob.glob(os.path.join(RUTA_RED_RELOJ, "*.xls*").replace("\\", "/"))
+            nuevos_o_actualizados = 0
+            for file_red in archivos_red:
+                fname = os.path.basename(file_red)
+                dest_path = os.path.join(dir_destino, fname).replace("\\", "/")
+                if not os.path.exists(dest_path) or os.path.getmtime(file_red) > os.path.getmtime(dest_path):
+                    import shutil
+                    shutil.copy2(file_red, dest_path)
+                    nuevos_o_actualizados += 1
+            return nuevos_o_actualizados
+        except Exception:
+            pass
+    return 0
+
+
 @st.cache_data
 def procesar_base_asistencias(carpeta):
+    # Sincronización automática de red si la ruta Q:\ está disponible
+    sincronizar_archivos_red(carpeta)
     ruta_busqueda = os.path.join(carpeta, "*.xls").replace("\\", "/")
     archivos = glob.glob(ruta_busqueda)
     if not archivos:
@@ -599,7 +626,39 @@ if st.session_state["usuario_rol"] is not None:
                     
                     status.update(label="✅ ¡Archivos e historial sincronizados!", state="complete")
                     st.rerun()
-        
+    # Sincronización automática desde Red Local (Q:\005 - Prenomina\Reloj)
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 📡 Sincronización de Red Local")
+    if os.path.exists(RUTA_RED_RELOJ):
+        st.sidebar.success("✅ **Red Q: Conectada** (`Q:\\005 - Prenomina\\Reloj`)")
+        if st.sidebar.button("🔄 Sincronizar Reloj desde Red (Q:)", use_container_width=True, key="btn_sync_q_drive"):
+            with st.sidebar.status("Sincronizando archivos desde red Q:...", expanded=True) as status_q:
+                n_sync = sincronizar_archivos_red(ruta_carpeta)
+                df_h = recalcular_historico_completo(ruta_carpeta, ARCHIVO_PERSONAL, hora_limite_input)
+                if not df_h.empty:
+                    df_h.to_excel(ARCHIVO_HISTORICO, index=False)
+                    if GITHUB_TOKEN:
+                        try:
+                            url_api_hist = f"https://api.github.com/repos/{REPO_NAME}/contents/asistencias/historico_semanal.xlsx"
+                            headers_github = {
+                                "Authorization": f"token {GITHUB_TOKEN}",
+                                "Accept": "application/vnd.github.v3+json",
+                                "User-Agent": "Streamlit-App"
+                            }
+                            res_get_hist = requests.get(url_api_hist, headers=headers_github, timeout=10)
+                            sha_hist = res_get_hist.json().get("sha") if res_get_hist.status_code == 200 else None
+                            with open(ARCHIVO_HISTORICO, "rb") as fh:
+                                content_h = base64.b64encode(fh.read()).decode("utf-8")
+                            payload_h = {"message": "Sincronización automática de red Q:", "content": content_h}
+                            if sha_hist: payload_h["sha"] = sha_hist
+                            requests.put(url_api_hist, json=payload_h, headers=headers_github, timeout=15)
+                        except Exception:
+                            pass
+                st.cache_data.clear()
+                status_q.update(label=f"✅ {n_sync} archivo(s) sincronizado(s) desde Red Q:", state="complete")
+                st.rerun()
+    else:
+        st.sidebar.info("🌐 **Ruta Red Q:** Servidor en la nube o ruta inaccesible.")
     # Selección de Hora Límite
     hora_limite_input = st.sidebar.time_input(
         "Hora límite de Entrada:", 
