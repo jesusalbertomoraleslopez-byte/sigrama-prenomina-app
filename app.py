@@ -336,29 +336,34 @@ def limpiar_registro_hora(valor_celda):
         except:
             return valor_celda.time() if hasattr(valor_celda, 'time') else None
 
-RUTA_RED_RELOJ = r"Q:\005 - Prenomina\Reloj"
+RUTAS_ORIGEN_LOCALES = [
+    r"Q:\005 - Prenomina\Reloj",
+    r"G:\Mi unidad\APP ANALISIS DE RELOJ CHECADOR PRENOMINA\Carpeta del Proyecto\asistencias"
+]
 
 def sincronizar_archivos_red(dir_destino="asistencias") -> int:
     """
-    Sincroniza automáticamente los archivos .xls desde la ruta de red
-    Q:\\005 - Prenomina\\Reloj hacia la carpeta de asistencias si la ruta de red está disponible.
+    Sincroniza automáticamente los archivos .xls desde las rutas locales/red de la empresa
+    (Red Q: y Google Drive) hacia la carpeta de asistencias si están disponibles en la computadora.
     """
-    if os.path.exists(RUTA_RED_RELOJ):
-        try:
-            os.makedirs(dir_destino, exist_ok=True)
-            archivos_red = glob.glob(os.path.join(RUTA_RED_RELOJ, "*.xls*").replace("\\", "/"))
-            nuevos_o_actualizados = 0
-            for file_red in archivos_red:
-                fname = os.path.basename(file_red)
-                dest_path = os.path.join(dir_destino, fname).replace("\\", "/")
-                if not os.path.exists(dest_path) or os.path.getmtime(file_red) > os.path.getmtime(dest_path):
-                    import shutil
-                    shutil.copy2(file_red, dest_path)
-                    nuevos_o_actualizados += 1
-            return nuevos_o_actualizados
-        except Exception:
-            pass
-    return 0
+    nuevos_o_actualizados = 0
+    os.makedirs(dir_destino, exist_ok=True)
+    for ruta_orig in RUTAS_ORIGEN_LOCALES:
+        if os.path.exists(ruta_orig):
+            try:
+                archivos_origen = glob.glob(os.path.join(ruta_orig, "*.xls*").replace("\\", "/"))
+                for file_orig in archivos_origen:
+                    fname = os.path.basename(file_orig)
+                    if fname.startswith("~$") or "banco_txt" in fname or "historico_semanal" in fname:
+                        continue
+                    dest_path = os.path.join(dir_destino, fname).replace("\\", "/")
+                    if not os.path.exists(dest_path) or os.path.getmtime(file_orig) > os.path.getmtime(dest_path):
+                        import shutil
+                        shutil.copy2(file_orig, dest_path)
+                        nuevos_o_actualizados += 1
+            except Exception:
+                pass
+    return nuevos_o_actualizados
 
 
 @st.cache_data
@@ -626,13 +631,14 @@ if st.session_state["usuario_rol"] is not None:
                     
                     status.update(label="✅ ¡Archivos e historial sincronizados!", state="complete")
                     st.rerun()
-    # Sincronización automática desde Red Local (Q:\005 - Prenomina\Reloj)
+    # Sincronización automática desde Rutas Locales y Red (Q: y Google Drive)
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 📡 Sincronización de Red Local")
-    if os.path.exists(RUTA_RED_RELOJ):
-        st.sidebar.success("✅ **Red Q: Conectada** (`Q:\\005 - Prenomina\\Reloj`)")
-        if st.sidebar.button("🔄 Sincronizar Reloj desde Red (Q:)", use_container_width=True, key="btn_sync_q_drive"):
-            with st.sidebar.status("Sincronizando archivos desde red Q:...", expanded=True) as status_q:
+    st.sidebar.markdown("### 📡 Sincronización Local y de Red")
+    rutas_conectadas = [r for r in RUTAS_ORIGEN_LOCALES if os.path.exists(r)]
+    if rutas_conectadas:
+        st.sidebar.success(f"✅ **Rutas Locales Conectadas ({len(rutas_conectadas)}):** Red Q: / Google Drive")
+        if st.sidebar.button("🔄 Sincronizar Reloj desde Rutas Locales", use_container_width=True, key="btn_sync_q_drive"):
+            with st.sidebar.status("Sincronizando archivos de asistencia desde tu PC...", expanded=True) as status_q:
                 n_sync = sincronizar_archivos_red(ruta_carpeta)
                 df_h = recalcular_historico_completo(ruta_carpeta, ARCHIVO_PERSONAL, hora_limite_input)
                 if not df_h.empty:
@@ -649,16 +655,16 @@ if st.session_state["usuario_rol"] is not None:
                             sha_hist = res_get_hist.json().get("sha") if res_get_hist.status_code == 200 else None
                             with open(ARCHIVO_HISTORICO, "rb") as fh:
                                 content_h = base64.b64encode(fh.read()).decode("utf-8")
-                            payload_h = {"message": "Sincronización automática de red Q:", "content": content_h}
+                            payload_h = {"message": "Sincronización automática desde PC local", "content": content_h}
                             if sha_hist: payload_h["sha"] = sha_hist
                             requests.put(url_api_hist, json=payload_h, headers=headers_github, timeout=15)
                         except Exception:
                             pass
                 st.cache_data.clear()
-                status_q.update(label=f"✅ {n_sync} archivo(s) sincronizado(s) desde Red Q:", state="complete")
+                status_q.update(label=f"✅ {n_sync} archivo(s) sincronizado(s) desde la PC.", state="complete")
                 st.rerun()
     else:
-        st.sidebar.info("🌐 **Ruta Red Q:** Servidor en la nube o ruta inaccesible.")
+        st.sidebar.info("🌐 **Rutas Locales:** Servidor en la nube o rutas inaccesibles.")
     # Selección de Hora Límite
     hora_limite_input = st.sidebar.time_input(
         "Hora límite de Entrada:", 
