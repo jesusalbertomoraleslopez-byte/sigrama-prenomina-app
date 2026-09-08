@@ -337,6 +337,7 @@ def limpiar_registro_hora(valor_celda):
             return valor_celda.time() if hasattr(valor_celda, 'time') else None
 
 RUTAS_ORIGEN_LOCALES = [
+    r"Q:\005 - RH\Reloj",
     r"Q:\005 - Prenomina\Reloj",
     r"G:\Mi unidad\APP ANALISIS DE RELOJ CHECADOR PRENOMINA\Carpeta del Proyecto\asistencias"
 ]
