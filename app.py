@@ -3,6 +3,7 @@
 # ==============================================================================
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import glob
 import os
@@ -10,6 +11,7 @@ import io
 import requests
 import base64
 import plotly.graph_objects as go
+from pathlib import Path
 from datetime import datetime, timedelta
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -24,6 +26,23 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+components.html("""
+<script>
+(function() {
+  function hideFooter() {
+    document.querySelectorAll('footer').forEach(function(el) { el.style.display='none'; });
+    ['stFooter','stDecoration','stViewerBadge'].forEach(function(id) {
+      document.querySelectorAll('[data-testid="'+id+'"]').forEach(function(el) { el.style.display='none'; });
+    });
+    document.querySelectorAll('div[class*="viewerBadge"],div[class*="ProfileButton"],a[href*="streamlit.io"]').forEach(function(el) { el.style.display='none'; });
+  }
+  var observer = new MutationObserver(hideFooter);
+  observer.observe(document.documentElement, {childList:true, subtree:true});
+  hideFooter();
+})();
+</script>
+""", height=0)
 
 # Inicialización de variables de sesión para control de acceso
 if "usuario_rol" not in st.session_state:
@@ -294,6 +313,11 @@ hr {
 }
 </style>
 """, unsafe_allow_html=True)
+
+# === BANNER SIGRAMA ===
+_banner_path = Path(__file__).resolve().parent / "banner_sigrama.png"
+if _banner_path.exists():
+    st.image(str(_banner_path), use_container_width=True)
 
 # ==============================================================================
 # ENCABEZADO INSTITUCIONAL - BANNER DE RECURSOS HUMANOS
