@@ -818,13 +818,14 @@ if st.session_state["usuario_rol"] is None:
     st.stop()
 
 # Declaración actualizada de las pestañas de la aplicación
-tab_reportes, tab_areas, tab_historico, tab_industria, tab_expedientes, tab_txt = st.tabs([
+tab_reportes, tab_areas, tab_historico, tab_industria, tab_expedientes, tab_txt, tab_conducta = st.tabs([
     "📊 Pre-Nómina y Reportes", 
     "📁 Asignación de Áreas y Personal",
     "📈 Histórico Semanal",
     "🤖 Manufactura Inteligente & Stack",
     "🎓 Expedientes & Capacitaciones",
-    "⏱️ Banco TxT"
+    "⏱️ Banco TxT",
+    "📜 Código de Conducta"
 ])
 
 
@@ -3359,3 +3360,297 @@ with tab_txt:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="dl_hist_txt"
             )
+
+
+# ==============================================================================
+# SECCIÓN CÓDIGO DE CONDUCTA - 10 PRINCIPIOS DE INDUSTRIA SIGRAMA
+# ==============================================================================
+
+def generar_pdf_codigo_conducta() -> io.BytesIO:
+    """Genera el documento PDF oficial de los 10 Principios de Código de Conducta."""
+    from reportlab.lib.pagesizes import letter
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib import colors
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=letter,
+        rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36
+    )
+    story = []
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle(
+        'HeaderTitle', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=18, leading=22,
+        textColor=colors.HexColor('#EC2024'), alignment=1
+    )
+    subtitle_style = ParagraphStyle(
+        'HeaderSubtitle', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=13, leading=16,
+        textColor=colors.HexColor('#111111'), alignment=1
+    )
+    tagline_style = ParagraphStyle(
+        'HeaderTagline', parent=styles['Normal'],
+        fontName='Helvetica-Oblique', fontSize=9, leading=12,
+        textColor=colors.HexColor('#555555'), alignment=1
+    )
+    num_style = ParagraphStyle(
+        'NumStyle', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=14, leading=16,
+        textColor=colors.HexColor('#EC2024'), alignment=1
+    )
+    p_desc_style = ParagraphStyle(
+        'PDescStyle', parent=styles['Normal'],
+        fontName='Helvetica', fontSize=8.5, leading=11.5,
+        textColor=colors.HexColor('#333333')
+    )
+    footer_style = ParagraphStyle(
+        'FooterText', parent=styles['Normal'],
+        fontName='Helvetica-Bold', fontSize=9, leading=11,
+        textColor=colors.HexColor('#EC2024'), alignment=1
+    )
+
+    story.append(Paragraph("INDUSTRIA SIGRAMA S.A. DE C.V.", subtitle_style))
+    story.append(Paragraph("10 PRINCIPIOS DE CÓDIGO DE CONDUCTA", title_style))
+    story.append(Paragraph("Marco Ético, Derechos Fundamentales y Normas de Convivencia Laboral", tagline_style))
+    story.append(Spacer(1, 10))
+    story.append(HRFlowable(width="100%", thickness=2, color=colors.HexColor("#EC2024"), spaceAfter=12))
+
+    principios = [
+        ("1", "DISCRIMINACIÓN",
+         "• Mostrar una conducta leal, respetuosa, diligente y honesta.<br/>"
+         "• Respetar la dignidad de las personas, su libertad y su privacidad.<br/>"
+         "• No permitir las conductas verbales, físicas o visuales que atenten contra la dignidad y el respeto.<br/>"
+         "• No discriminar a las personas haciendo alguna distinción, exclusión, restricción o preferencia."),
+        ("2", "PRINCIPIOS Y DERECHOS FUNDAMENTALES",
+         "• Valoramos y respetamos a las personas que trabajan en Industria Sigrama.<br/>"
+         "• No se permite el trabajo forzoso, apoyamos la erradicación del trabajo infantil y cumplimos con las leyes aplicables."),
+        ("3", "ACOSO Y HOSTIGAMIENTO LABORAL",
+         "Se entiende por violencia u hostigamiento laboral a toda acción, omisión o comportamiento, destinado a provocar, directa o indirectamente, daño físico, psicológico o moral a una trabajadora o trabajador, sea como amenaza o acción."),
+        ("4", "ACOSO SEXUAL",
+         "Se entiende por acoso sexual cuando un colaborador/colaboradora regido por este Código, valiéndose de su posición de superioridad, situación de autoridad, de poder, edad, sexo, posición laboral, o cualquier otra; acose, persiga, o asedie de forma física, verbal o no verbal, a otra persona con fines sexuales no consentidos."),
+        ("5", "CONFLICTO DE INTERÉS",
+         "Existe 'conflicto de intereses' cuando los intereses personales, laborales, económicos y/o financieros de una persona condicionan el ejercicio de sus funciones dentro de la compañía.<br/>"
+         "Se incluyen los intereses de sus respectivos cónyuges y familiares hasta el tercer grado de consanguinidad o afinidad."),
+        ("6", "CORRUPCIÓN LABORAL",
+         "Están prohibidas las acciones de solicitar, aceptar, recibir y/u obtener, por sí o por intermediarios, dinero o cualquier otro beneficio o servicio, para sí o para un tercero, con el fin de ofrecer una promesa para hacer, dejar de hacer o promover actos legales o ilegales relacionados con las actividades de Industria Sigrama."),
+        ("7", "TRANSPARENCIA, COMUNICACIÓN Y CUIDADO DE LA INFORMACIÓN",
+         "No se divulgará y se evitará la filtración de información catalogada como confidencial y/o prioritaria por personas no autorizadas y/o ajenas.<br/>"
+         "Como colaboradores de Industria Sigrama manifestamos ser conscientes de la responsabilidad compartida, en la protección y preservación de la seguridad de la información que se administra en nuestros puestos de trabajo."),
+        ("8", "ÉTICA E INTEGRIDAD LABORAL",
+         "Actuar de acuerdo a valores como la igualdad, libertad, diálogo, respeto, responsabilidad, lealtad, honestidad, solidaridad y excelencia.<br/>"
+         "Desarrollar una cultura organizacional con valores comunes para todos sus miembros. Intentar alcanzar la satisfacción de todas las personas involucradas en la empresa."),
+        ("9", "CUMPLIMIENTO SOCIAL",
+         "Establecemos alianzas estratégicas con organizaciones de la sociedad civil y otras entidades, que tengan por objetivo potenciar el impacto social de nuestras acciones comunitarias.<br/>"
+         "Ejercemos una ciudadanía activa participando en asuntos comunitarios y públicos, que nos permiten tener impacto en el desarrollo humano y económico de las comunidades en las que operamos."),
+        ("10", "SALUD Y SEGURIDAD",
+         "Tomamos las acciones necesarias para asegurar que se cumplan los siguientes objetivos de seguridad y salud en el trabajo:<br/>"
+         "a) Proveer y mantener lugares de trabajo seguros y saludables.<br/>"
+         "b) Proporcionar y mantener un ambiente de trabajo adecuado.<br/>"
+         "c) Desarrollar una cultura de seguridad entre el personal.")
+    ]
+
+    table_data = []
+    for num, titulo, desc in principios:
+        p_num = Paragraph(f"<b>{num}</b>", num_style)
+        p_content = Paragraph(f"<b>{titulo}</b><br/>{desc}", p_desc_style)
+        table_data.append([p_num, p_content])
+
+    t = Table(table_data, colWidths=[35, 505])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#FFFFFF')),
+        ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor('#E0E0E0')),
+        ('ALIGN', (0,0), (0,-1), 'CENTER'),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 14))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#EC2024"), spaceAfter=8))
+    story.append(Paragraph("<b>Ingeniería que da resultados!!</b> &nbsp;|&nbsp; Departamento de Recursos Humanos — Industria Sigrama", footer_style))
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+
+with tab_conducta:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #111111 0%, #1a1a1a 50%, #EC2024 100%); padding: 24px; border-radius: 10px; color: white; margin-bottom: 24px;">
+        <h2 style="margin: 0; color: #ffffff; font-family: Questrial; font-size: 26px;">📜 10 PRINCIPIOS DE CÓDIGO DE CONDUCTA</h2>
+        <p style="margin: 6px 0 0 0; color: #e0e0e0; font-size: 14px;">
+            <b>INDUSTRIA SIGRAMA S.A. DE C.V.</b> — Marco ético, valores fundamentales y normas de convivencia laboral en Recursos Humanos.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Tarjetas de Métricas de Conducta
+    m1, m2, m3, m4 = st.columns(4)
+    with m1: st.metric("Principios Éticos", "10 Normas")
+    with m2: st.metric("Compromiso Ético", "100% Cobertura")
+    with m3: st.metric("Tolerancia", "Zero Acoso")
+    with m4: st.metric("Vigencia", "2026 Activo")
+
+    st.write("---")
+
+    # Botón de Descarga del PDF Oficial
+    col_pdf1, col_pdf2 = st.columns([3, 1])
+    with col_pdf1:
+        st.markdown("#### 📄 Código de Conducta Oficial en PDF")
+        st.caption("Descarga la versión imprimible y firmada del Código de Conducta de Industria Sigrama.")
+    with col_pdf2:
+        pdf_conducta_bytes = generar_pdf_codigo_conducta()
+        st.download_button(
+            label="⬇️ Descargar PDF Oficial",
+            data=pdf_conducta_bytes,
+            file_name="Codigo_de_Conducta_Industria_Sigrama.pdf",
+            mime="application/pdf",
+            type="primary",
+            use_container_width=True,
+            key="btn_dl_codigo_conducta_pdf"
+        )
+
+    st.write("---")
+    st.subheader("📋 Lista Interactiva de los 10 Principios")
+
+    search_conducta = st.text_input("🔍 Buscar en el Código de Conducta (ej: Acoso, Discriminación, Conflicto):", key="search_cond_inp")
+
+    LISTA_PRINCIPIOS = [
+        {
+            "num": "1",
+            "titulo": "DISCRIMINACIÓN",
+            "icono": "🤝",
+            "color": "#EC2024",
+            "puntos": [
+                "Mostrar una conducta leal, respetuosa, diligente y honesta.",
+                "Respetar la dignidad de las personas, su libertad y su privacidad.",
+                "No permitir las conductas verbales, físicas o visuales que atenten contra la dignidad y el respeto.",
+                "No discriminar a las personas haciendo alguna distinción, exclusión, restricción o preferencia."
+            ]
+        },
+        {
+            "num": "2",
+            "titulo": "PRINCIPIOS Y DERECHOS FUNDAMENTALES",
+            "icono": "⚖️",
+            "color": "#111111",
+            "puntos": [
+                "Valoramos y respetamos a las personas que trabajan en Industria Sigrama.",
+                "No se permite el trabajo forzoso, apoyamos la erradicación del trabajo infantil y cumplimos con las leyes aplicables."
+            ]
+        },
+        {
+            "num": "3",
+            "titulo": "ACOSO Y HOSTIGAMIENTO LABORAL",
+            "icono": "🛑",
+            "color": "#EC2024",
+            "puntos": [
+                "Se entiende por violencia u hostigamiento laboral a toda acción, omisión o comportamiento, destinado a provocar, directa o indirectamente, daño físico, psicológico o moral a una trabajadora o trabajador, sea como amenaza o acción."
+            ]
+        },
+        {
+            "num": "4",
+            "titulo": "ACOSO SEXUAL",
+            "icono": "🚫",
+            "color": "#111111",
+            "puntos": [
+                "Se entiende por acoso sexual cuando un colaborador/colaboradora regido por este Código, valiéndose de su posición de superioridad, situación de autoridad, de poder, edad, sexo, posición laboral, o cualquier otra; acose, persiga, o asedie de forma física, verbal o no verbal, a otra persona con fines sexuales no consentidos."
+            ]
+        },
+        {
+            "num": "5",
+            "titulo": "CONFLICTO DE INTERÉS",
+            "icono": "🔄",
+            "color": "#EC2024",
+            "puntos": [
+                "Existe 'conflicto de intereses' cuando los intereses personales, laborales, económicos y/o financieros de una persona condicionan el ejercicio de sus funciones dentro de la compañía.",
+                "Se incluyen los intereses de sus respectivos cónyuges y familiares hasta el tercer grado de consanguinidad o afinidad."
+            ]
+        },
+        {
+            "num": "6",
+            "titulo": "CORRUPCIÓN LABORAL",
+            "icono": "⚠️",
+            "color": "#111111",
+            "puntos": [
+                "Están prohibidas las acciones de solicitar, aceptar, recibir y/u obtener, por sí o por intermediarios, dinero o cualquier otro beneficio o servicio, para sí o para un tercero, con el fin de ofrecer una promesa para hacer, dejar de hacer o promover actos legales o ilegales relacionados con las actividades de Industria Sigrama."
+            ]
+        },
+        {
+            "num": "7",
+            "titulo": "TRANSPARENCIA, COMUNICACIÓN Y CUIDADO DE LA INFORMACIÓN",
+            "icono": "💬",
+            "color": "#EC2024",
+            "puntos": [
+                "No se divulgará y se evitará la filtración de información catalogada como confidencial y/o prioritaria por personas no autorizadas y/o ajenas.",
+                "Como colaboradores de Industria Sigrama manifestamos ser conscientes de la responsabilidad compartida, en la protección y preservación de la seguridad de la información que se administra en nuestros puestos de trabajo."
+            ]
+        },
+        {
+            "num": "8",
+            "titulo": "ÉTICA E INTEGRIDAD LABORAL",
+            "icono": "🏛️",
+            "color": "#111111",
+            "puntos": [
+                "Actuar de acuerdo a valores como la igualdad, libertad, diálogo, respeto, responsabilidad, lealtad, honestidad, solidaridad y excelencia.",
+                "Desarrollar una cultura organizacional con valores comunes para todos sus miembros. Intentar alcanzar la satisfacción de todas las personas involucradas en la empresa."
+            ]
+        },
+        {
+            "num": "9",
+            "titulo": "CUMPLIMIENTO SOCIAL",
+            "icono": "🌍",
+            "color": "#EC2024",
+            "puntos": [
+                "Establecemos alianzas estratégicas con organizaciones de la sociedad civil y otras entidades, que tengan por objetivo potenciar el impacto social de nuestras acciones comunitarias.",
+                "Ejercemos una ciudadanía activa participando en asuntos comunitarios y públicos, que nos permiten tener impacto en el desarrollo humano y económico de las comunidades en las que operamos."
+            ]
+        },
+        {
+            "num": "10",
+            "titulo": "SALUD Y SEGURIDAD",
+            "icono": "🛡️",
+            "color": "#111111",
+            "puntos": [
+                "Tomamos las acciones necesarias para asegurar que se cumplan los siguientes objetivos de seguridad y salud en el trabajo:",
+                "a) Proveer y mantener lugares de trabajo seguros y saludables.",
+                "b) Proporcionar y mantener un ambiente de trabajo adecuado.",
+                "c) Desarrollar una cultura de seguridad entre el personal."
+            ]
+        }
+    ]
+
+    principios_filtrados = [
+        p for p in LISTA_PRINCIPIOS 
+        if not search_conducta.strip() or 
+        search_conducta.lower() in p["titulo"].lower() or 
+        any(search_conducta.lower() in pt.lower() for pt in p["puntos"]) or
+        search_conducta.strip() == p["num"]
+    ]
+
+    if not principios_filtrados:
+        st.warning(f"No se encontraron principios que coincidan con '{search_conducta}'.")
+    else:
+        # Renderizar en 2 columnas
+        col_c1, col_c2 = st.columns(2)
+        for idx_p, item_p in enumerate(principios_filtrados):
+            col_target = col_c1 if idx_p % 2 == 0 else col_c2
+            with col_target:
+                puntos_html = "".join([f"<li style='margin-bottom: 4px;'>{pt}</li>" for pt in item_p["puntos"]])
+                st.markdown(f"""
+                <div style="background: #ffffff; border: 1px solid #e0e0e0; border-left: 5px solid {item_p['color']}; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.04);">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+                        <span style="font-size: 20px;">{item_p['icono']}</span>
+                        <span style="background: {item_p['color']}; color: white; padding: 2px 10px; border-radius: 12px; font-weight: bold; font-size: 13px;">PRINCIPIO {item_p['num']}</span>
+                    </div>
+                    <h4 style="margin: 0 0 10px 0; color: #111111; font-family: Questrial; font-size: 15px;">{item_p['titulo']}</h4>
+                    <ul style="margin: 0; padding-left: 18px; color: #444444; font-size: 13px; line-height: 1.4;">
+                        {puntos_html}
+                    </ul>
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.write("---")
+    st.markdown("<p style='text-align: center; color: #EC2024; font-weight: bold; font-family: Questrial; font-size: 16px;'>Ingeniería que da resultados!!</p>", unsafe_allow_html=True)
