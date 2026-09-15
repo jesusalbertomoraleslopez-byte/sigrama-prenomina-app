@@ -1951,8 +1951,8 @@ with tab_expedientes:
             st.error("❌ No se pudieron cargar los datos del sistema de personal.")
         else:
             # ---- Limpiar datos ----
-            df_personal_acc = df_personal_acc.fillna("").astype(str).applymap(str.strip)
-            df_cursos_acc   = df_cursos_acc.fillna("").astype(str).applymap(str.strip)
+            df_personal_acc = df_personal_acc.fillna("").astype(str).map(str.strip)
+            df_cursos_acc   = df_cursos_acc.fillna("").astype(str).map(str.strip)
 
             # ---- KPI banner superior ----
             total_emp  = len(df_personal_acc)
