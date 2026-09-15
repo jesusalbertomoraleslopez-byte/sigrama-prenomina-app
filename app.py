@@ -1861,10 +1861,10 @@ import json as _json
 
 @st.cache_data(ttl=300, show_spinner=False)
 def leer_tabla_access(tabla: str) -> pd.DataFrame:
-    """Lee una tabla de la base de datos Access usando PowerShell 32-bit + ACE OLEDB."""
-    if not os.path.exists(PS32):
-        return pd.DataFrame()
-    ps_script = f"""
+    """Lee una tabla de la base de datos Access usando PowerShell 32-bit + ACE OLEDB, o usa el respaldo CSV."""
+    df_res = pd.DataFrame()
+    if os.path.exists(PS32) and os.path.exists(RUTA_ACCESS_DB):
+        ps_script = f"""
 $conn = New-Object -ComObject ADODB.Connection
 $conn.Open("Provider=Microsoft.ACE.OLEDB.16.0;Data Source={RUTA_ACCESS_DB};")
 $rs = New-Object -ComObject ADODB.Recordset
@@ -1887,21 +1887,29 @@ $rs.Close()
 $conn.Close()
 $rows | ConvertTo-Json -Depth 3
 """
-    try:
-        res = subprocess.run(
-            [PS32, "-Command", ps_script],
-            capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=30
-        )
-        if not res.stdout.strip():
-            return pd.DataFrame()
-        raw = res.stdout.strip()
-        # PowerShell returns a single object if 1 row, wrap it
-        if raw.startswith("{"):
-            raw = f"[{raw}]"
-        datos = _json.loads(raw)
-        return pd.DataFrame(datos)
-    except Exception:
-        return pd.DataFrame()
+        try:
+            res = subprocess.run(
+                [PS32, "-Command", ps_script],
+                capture_output=True, text=True, encoding="utf-8", errors="ignore", timeout=30
+            )
+            if res.stdout.strip():
+                raw = res.stdout.strip()
+                if raw.startswith("{"):
+                    raw = f"[{raw}]"
+                datos = _json.loads(raw)
+                df_res = pd.DataFrame(datos)
+        except Exception:
+            pass
+
+    # Fallback transparente a los archivos respaldados de Access (.csv)
+    if df_res.empty:
+        csv_path = os.path.join(ruta_carpeta, f"access_{tabla}.csv").replace("\\", "/")
+        if os.path.exists(csv_path):
+            try:
+                df_res = pd.read_csv(csv_path, dtype=str).fillna("")
+            except Exception:
+                pass
+    return df_res
 
 
 def _limpiar_texto(val) -> str:
@@ -1922,8 +1930,8 @@ with tab_expedientes:
     </div>
     """, unsafe_allow_html=True)
 
-    # Verificar si la DB local existe
-    db_disponible = os.path.exists(RUTA_ACCESS_DB)
+    # Verificar si la DB local o su respaldo existe
+    db_disponible = os.path.exists(RUTA_ACCESS_DB) or os.path.exists(os.path.join(ruta_carpeta, "access_PERSONAL.csv"))
 
     if not db_disponible:
         st.warning(
@@ -1940,7 +1948,7 @@ with tab_expedientes:
             df_cursos_cat   = leer_tabla_access("Cusos_Disponibles")
 
         if df_personal_acc.empty:
-            st.error("❌ No se pudo conectar a la base de datos Access. Verifica que el motor ACE OLEDB esté instalado.")
+            st.error("❌ No se pudieron cargar los datos del sistema de personal.")
         else:
             # ---- Limpiar datos ----
             df_personal_acc = df_personal_acc.fillna("").astype(str).applymap(str.strip)
