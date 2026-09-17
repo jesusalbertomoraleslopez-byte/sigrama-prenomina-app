@@ -1918,6 +1918,28 @@ def _limpiar_texto(val) -> str:
     return "" if s in ("None", "nan", "NULL", "") else s
 
 
+def obtener_cursos_empleado(df_cursos: pd.DataFrame, num_ctrl: str, nombre_empleado: str = "") -> pd.DataFrame:
+    """
+    Enlaza de forma robusta los cursos de un colaborador considerando número de control (zfill(5)),
+    números enteros y alias de migraciones anteriores (ej. 09517 -> 00001).
+    """
+    if df_cursos.empty or "Empleado" not in df_cursos.columns:
+        return pd.DataFrame()
+    num_clean = str(num_ctrl).strip().zfill(5)
+    num_int   = str(int(num_clean)) if num_clean.isdigit() else num_clean
+    alias_map = {
+        '00001': ['00001', '09517', '9517', '1'],
+        '00002': ['00002', '2'],
+        '00003': ['00003', '3'],
+        '00004': ['00004', '4'],
+        '00005': ['00005', '5'],
+        '00006': ['00006', '6']
+    }
+    match_ids = alias_map.get(num_clean, [num_clean, num_int])
+    mask_emp  = df_cursos['Empleado'].astype(str).str.strip().apply(lambda v: v.zfill(5) in match_ids or v in match_ids)
+    return df_cursos[mask_emp].copy()
+
+
 def visualizar_documento_curso(nombre_archivo: str, key_prefix: str = ""):
     """
     Busca y visualiza un archivo de constancia/reconocimiento de curso (PDF o imagen).
@@ -2042,21 +2064,22 @@ def visualizar_documento_curso(nombre_archivo: str, key_prefix: str = ""):
 
 def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFrame, foto_path: str = None) -> io.BytesIO:
     """
-    Genera el reporte ejecutivo completo en PDF de la Ficha Técnica del Colaborador.
+    Genera el reporte ejecutivo completo en PDF de la Ficha Técnica del Colaborador con miniaturas de diplomas y constancias de cursos.
     """
     from datetime import datetime
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
+    from reportlab.platypus import Image as RLImage
 
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=28, rightMargin=28, topMargin=28, bottomMargin=28)
     styles = getSampleStyleSheet()
     
     h1_style = ParagraphStyle('H1', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=15, leading=18, textColor=colors.HexColor('#FFFFFF'), alignment=0)
     sub_style = ParagraphStyle('Sub', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=12, textColor=colors.HexColor('#EC2024'))
-    sec_title = ParagraphStyle('SecTitle', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=11, leading=14, textColor=colors.HexColor('#111111'), spaceBefore=10, spaceAfter=4)
+    sec_title = ParagraphStyle('SecTitle', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=11, leading=14, textColor=colors.HexColor('#111111'), spaceBefore=8, spaceAfter=4)
     lbl_style = ParagraphStyle('Lbl', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, leading=10, textColor=colors.HexColor('#555555'))
     val_style = ParagraphStyle('Val', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=11, textColor=colors.HexColor('#111111'))
     tbl_hdr = ParagraphStyle('TblHdr', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10, textColor=colors.HexColor('#FFFFFF'))
@@ -2068,7 +2091,7 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
         [Paragraph('INDUSTRIA SIGRAMA S.A. DE C.V.', h1_style), Paragraph(f"Fecha: {datetime.now().strftime('%d/%m/%Y')}", ParagraphStyle('Dt', parent=h1_style, fontSize=9, alignment=2, textColor=colors.HexColor('#DDDDDD')))],
         [Paragraph('FICHA TÉCNICA DEL COLABORADOR Y EXPEDIENTE DIGITAL DE CAPACITACIÓN', sub_style), '']
     ]
-    banner_tbl = Table(banner_data, colWidths=[380, 160])
+    banner_tbl = Table(banner_data, colWidths=[390, 166])
     banner_tbl.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#111111')),
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -2077,7 +2100,7 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
         ('BOTTOMPADDING', (0,1), (-1,1), 10)
     ]))
     elements.append(banner_tbl)
-    elements.append(Spacer(1, 10))
+    elements.append(Spacer(1, 8))
     
     num_ctrl = _limpiar_texto(row_personal.get('Numero_Control_Personal', '')).zfill(5)
     nombre = _limpiar_texto(row_personal.get('Nombre_Empleado_Robotica', ''))
@@ -2100,7 +2123,7 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
         [Paragraph('RFC:', lbl_style), Paragraph(rfc, val_style)],
         [Paragraph('NSS:', lbl_style), Paragraph(nss, val_style)],
     ]
-    tbl_datos_left = Table(datos_left, colWidths=[95, 245])
+    tbl_datos_left = Table(datos_left, colWidths=[95, 281])
     tbl_datos_left.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ('BOTTOMPADDING', (0,0), (-1,-1), 3),
@@ -2111,7 +2134,7 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
     img_flowable = Paragraph('<br/><br/><i>Sin Foto Oficial</i>', ParagraphStyle('NoFoto', alignment=1, textColor=colors.HexColor('#888888')))
     if foto_path and os.path.exists(foto_path):
         try:
-            img_flowable = Image(foto_path, width=120, height=140)
+            img_flowable = RLImage(foto_path, width=120, height=140)
         except Exception:
             pass
             
@@ -2124,21 +2147,21 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
         ('PADDING', (0,0), (-1,-1), 4)
     ]))
     
-    profile_table = Table([[tbl_datos_left, tbl_foto_box]], colWidths=[365, 175])
+    profile_table = Table([[tbl_datos_left, tbl_foto_box]], colWidths=[401, 155])
     profile_table.setStyle(TableStyle([
         ('VALIGN', (0,0), (-1,-1), 'TOP')
     ]))
     elements.append(profile_table)
-    elements.append(Spacer(1, 8))
+    elements.append(Spacer(1, 6))
     
     elements.append(Paragraph('🩸 DATOS MÉDICOS Y DE CONTACTO', sec_title))
-    elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#EC2024'), spaceBefore=1, spaceAfter=6))
+    elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#EC2024'), spaceBefore=1, spaceAfter=4))
     
     med_data = [
         [Paragraph('TIPO DE SANGRE:', lbl_style), Paragraph(f'<b>{sangre if sangre else "N/D"}</b>', val_style), Paragraph('TELÉFONO:', lbl_style), Paragraph(telefono if telefono else 'N/D', val_style)],
         [Paragraph('PADECIMIENTOS:', lbl_style), Paragraph(padecim if padecim else 'Ninguno', val_style), Paragraph('ALERGIAS:', lbl_style), Paragraph(alergias if alergias else 'Ninguna', val_style)]
     ]
-    tbl_med = Table(med_data, colWidths=[95, 175, 75, 195])
+    tbl_med = Table(med_data, colWidths=[95, 185, 75, 201])
     tbl_med.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8F9FA')),
         ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#DDDDDD')),
@@ -2146,9 +2169,41 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
         ('PADDING', (0,0), (-1,-1), 5)
     ]))
     elements.append(tbl_med)
-    elements.append(Spacer(1, 10))
+    elements.append(Spacer(1, 8))
     
-    elements.append(Paragraph('📚 MATRIZ DE CAPACITACIÓN Y HISTORIAL DE CURSOS', sec_title))
+    # Helper para miniaturas de constancias
+    dir_docs = os.path.join(ruta_carpeta, "documentos_cursos").replace("\\", "/")
+    def _obtener_miniatura(nombre_archivo: str):
+        if not nombre_archivo or str(nombre_archivo).strip() in ("", "nan", "None", "0"):
+            return Paragraph('<i>Sin Comprobante</i>', ParagraphStyle('NoDoc', fontSize=7, textColor=colors.HexColor('#888888')))
+        fn = str(nombre_archivo).strip()
+        ruta = os.path.join(dir_docs, fn).replace("\\", "/")
+        if not os.path.exists(ruta) and os.path.exists(dir_docs):
+            for f in os.listdir(dir_docs):
+                if f.lower() == fn.lower() or (len(fn) > 4 and f.lower().startswith(fn.lower()[:12])):
+                    ruta = os.path.join(dir_docs, f).replace("\\", "/")
+                    break
+        if os.path.exists(ruta) and os.path.isfile(ruta):
+            ext = os.path.splitext(ruta)[1].lower()
+            if ext == ".pdf":
+                try:
+                    import fitz
+                    doc = fitz.open(ruta)
+                    page = doc.load_page(0)
+                    pix = page.get_pixmap(dpi=72)
+                    buf = io.BytesIO(pix.tobytes("png"))
+                    return RLImage(buf, width=105, height=72)
+                except Exception:
+                    return Paragraph(f"📄 PDF: {fn[:18]}...", ParagraphStyle('DocTxt', fontSize=7, leading=8))
+            elif ext in [".jpg", ".jpeg", ".png", ".webp"]:
+                try:
+                    return RLImage(ruta, width=105, height=72)
+                except Exception:
+                    return Paragraph(f"🖼️ Img: {fn[:18]}...", ParagraphStyle('DocTxt', fontSize=7, leading=8))
+        return Paragraph(f"📄 {fn[:18]}...", ParagraphStyle('DocTxt', fontSize=7, leading=8))
+
+    # 4. Historial de Cursos con Miniaturas
+    elements.append(Paragraph('📚 MATRIZ DE CAPACITACIÓN Y COMPROBANTES DE CURSOS', sec_title))
     elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#111111'), spaceBefore=1, spaceAfter=6))
     
     if df_emp_cursos.empty:
@@ -2157,34 +2212,37 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
         cursos_table_data = [[
             Paragraph('CURSO', tbl_hdr),
             Paragraph('HORAS', tbl_hdr),
-            Paragraph('CONSTANCIA / DIPLOMA', tbl_hdr),
             Paragraph('FECHA', tbl_hdr),
             Paragraph('DC-3', tbl_hdr),
-            Paragraph('IMPARTIDO POR', tbl_hdr)
+            Paragraph('IMPARTIDO POR', tbl_hdr),
+            Paragraph('COMPROBANTE / DIPLOMA', tbl_hdr)
         ]]
         
         for _, r_c in df_emp_cursos.iterrows():
             c_nombre = _limpiar_texto(r_c.get('Nombre_del_Curso', ''))
-            c_hrs = _limpiar_texto(r_c.get('Horas_Invertidas', ''))
-            c_doc = _limpiar_texto(r_c.get('Reconocimiento', ''))
-            c_fec = str(r_c.get('Fecha_del_curso', ''))[:10]
-            c_dc3 = 'SÍ' if _limpiar_texto(r_c.get('DCIII', '')) else 'NO'
-            c_imp = _limpiar_texto(r_c.get('Quien_imparte', ''))
+            c_hrs    = _limpiar_texto(r_c.get('Horas_Invertidas', ''))
+            c_doc    = _limpiar_texto(r_c.get('Reconocimiento', ''))
+            c_fec    = str(r_c.get('Fecha_del_curso', ''))[:10]
+            c_dc3    = 'SÍ' if _limpiar_texto(r_c.get('DCIII', '')) else 'NO'
+            c_imp    = _limpiar_texto(r_c.get('Quien_imparte', ''))
             
+            miniatura = _obtener_miniatura(c_doc)
+
             cursos_table_data.append([
                 Paragraph(c_nombre, tbl_cell),
                 Paragraph(c_hrs, tbl_cell),
-                Paragraph(c_doc if c_doc else 'Sin Archivo', tbl_cell),
                 Paragraph(c_fec, tbl_cell),
                 Paragraph(f'<b>{c_dc3}</b>', tbl_cell),
-                Paragraph(c_imp, tbl_cell)
+                Paragraph(c_imp, tbl_cell),
+                miniatura
             ])
             
-        tbl_cursos = Table(cursos_table_data, colWidths=[160, 45, 145, 65, 35, 90])
+        tbl_cursos = Table(cursos_table_data, colWidths=[150, 40, 60, 35, 115, 156])
         tbl_cursos.setStyle(TableStyle([
             ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#111111')),
             ('ALIGN', (1,0), (1,-1), 'CENTER'),
-            ('ALIGN', (3,0), (4,-1), 'CENTER'),
+            ('ALIGN', (2,0), (3,-1), 'CENTER'),
+            ('ALIGN', (5,0), (5,-1), 'CENTER'),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#DDDDDD')),
             ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F9F9F9')]),
@@ -2306,13 +2364,8 @@ with tab_expedientes:
                     padecim     = _limpiar_texto(fila.get("Padecimientos:", "")) or "NINGUNO"
                     alergias    = _limpiar_texto(fila.get("Alergias:", "")) or "NINGUNA"
 
-                    # Filtrar cursos del empleado
-                    if not df_cursos_acc.empty and "Empleado" in df_cursos_acc.columns:
-                        df_emp_cursos = df_cursos_acc[
-                            df_cursos_acc["Empleado"].astype(str).str.strip().str.zfill(5) == num_ctrl.zfill(5)
-                        ].copy()
-                    else:
-                        df_emp_cursos = pd.DataFrame()
+                    # Filtrar cursos del empleado con soporte para alias y vinculación por número de control
+                    df_emp_cursos = obtener_cursos_empleado(df_cursos_acc, num_ctrl, nombre_disp)
 
                     # Buscar foto oficial si existe
                     foto_path1 = os.path.join(ruta_carpeta, "fotos", f"foto_{num_ctrl}.jpg").replace("\\", "/")
