@@ -1957,9 +1957,47 @@ def visualizar_documento_curso(nombre_archivo: str, key_prefix: str = ""):
             try:
                 with open(ruta_final, "rb") as f_pdf:
                     pdf_bytes = f_pdf.read()
-                base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
-                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf" style="border:1px solid #ccc; border-radius:6px; margin-bottom:10px;"></iframe>'
-                st.markdown(pdf_display, unsafe_allow_html=True)
+
+                rendered_images = []
+                # 1. Intentar renderizado de alta resolución con PyMuPDF (fitz)
+                try:
+                    import fitz  # PyMuPDF
+                    doc = fitz.open(ruta_final)
+                    for page_num in range(len(doc)):
+                        page = doc.load_page(page_num)
+                        pix = page.get_pixmap(dpi=150)
+                        rendered_images.append(pix.tobytes("png"))
+                except Exception:
+                    pass
+
+                # 2. Intentar renderizado con pypdfium2 si fitz no estuvo disponible
+                if not rendered_images:
+                    try:
+                        import io
+                        import pypdfium2 as pdfium
+                        pdf = pdfium.PdfDocument(ruta_final)
+                        for page in pdf:
+                            image = page.render(scale=2).to_pil()
+                            buf = io.BytesIO()
+                            image.save(buf, format="PNG")
+                            rendered_images.append(buf.getvalue())
+                    except Exception:
+                        pass
+
+                if rendered_images:
+                    for page_idx, img_bytes in enumerate(rendered_images):
+                        cap = f"Página {page_idx+1} de {len(rendered_images)} — {nombre_limpio}" if len(rendered_images) > 1 else f"Constancia PDF — {nombre_limpio}"
+                        st.image(img_bytes, caption=cap, use_container_width=True)
+                else:
+                    # Fallback HTML embebido en caso de no contar con librerías de imagen
+                    base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+                    st.markdown(
+                        f'<object data="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="600px">'
+                        f'<p>Tu navegador no pudo previsualizar el PDF embebido directamente. Utiliza el botón a continuación para descargarlo.</p>'
+                        f'</object>',
+                        unsafe_allow_html=True
+                    )
+
                 st.download_button(
                     label=f"📥 Descargar PDF ({nombre_limpio})",
                     data=pdf_bytes,
@@ -1968,7 +2006,7 @@ def visualizar_documento_curso(nombre_archivo: str, key_prefix: str = ""):
                     key=f"dl_pdf_{key_prefix}_{abs(hash(nombre_limpio))}"
                 )
             except Exception as e:
-                st.error(f"Error leyendo PDF: {e}")
+                st.error(f"Error procesando PDF: {e}")
         elif ext in [".jpg", ".jpeg", ".png", ".webp"]:
             try:
                 st.image(ruta_final, caption=f"Constancia — {nombre_limpio}", use_container_width=True)

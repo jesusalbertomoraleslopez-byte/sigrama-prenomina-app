@@ -6,3 +6,6 @@ xlrd
 openpyxl
 xlsxwriter
 reportlab
+PyMuPDF
+pypdfium2
+
