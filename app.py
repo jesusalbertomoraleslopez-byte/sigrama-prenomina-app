@@ -2045,6 +2045,11 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
     Genera el reporte ejecutivo completo en PDF de la Ficha Técnica del Colaborador.
     """
     from datetime import datetime
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image, HRFlowable
+
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
     styles = getSampleStyleSheet()
