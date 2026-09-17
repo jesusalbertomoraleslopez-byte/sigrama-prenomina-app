@@ -17,6 +17,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+import textwrap
 
 
 # Configuración estética de la interfaz del navegador
@@ -2025,9 +2026,9 @@ with tab_expedientes:
                     c_left, c_photo, c_right = st.columns([2.5, 1.8, 2])
 
                     with c_left:
-                        st.markdown(f"""
+                        st.markdown(textwrap.dedent(f"""
                         <div style="background: #ffffff; border: 1px solid #e0e0e0; border-top: 4px solid #EC2024; border-radius: 8px; padding: 16px; margin-bottom: 14px;">
-                            <div style="display:flex; justify-space-between; align-items:center; margin-bottom:8px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                                 <span style="background:#EC2024; color:white; padding:3px 10px; border-radius:4px; font-weight:bold; font-size:12px;">Numero de Control</span>
                                 <span style="font-family:monospace; font-size:16px; font-weight:bold; color:#111;">{num_ctrl}</span>
                             </div>
@@ -2059,7 +2060,7 @@ with tab_expedientes:
                                 </div>
                             </div>
                         </div>
-                        """, unsafe_allow_html=True)
+                        """), unsafe_allow_html=True)
 
                     with c_photo:
                         # Buscar foto extraída foto_{num_ctrl}.jpg o foto_{int(num_ctrl)}.jpg
@@ -2080,7 +2081,7 @@ with tab_expedientes:
                         st.markdown("</div>", unsafe_allow_html=True)
 
                     with c_right:
-                        st.markdown(f"""
+                        st.markdown(textwrap.dedent(f"""
                         <div style="background: #ffffff; border: 1px solid #e0e0e0; border-top: 4px solid #111111; border-radius: 8px; padding: 16px; margin-bottom: 14px;">
                             <div style="margin-bottom:10px;">
                                 <span style="background:#111111; color:white; padding:3px 10px; border-radius:4px; font-weight:bold; font-size:11px;">Tipo de Sangre</span>
@@ -2102,7 +2103,7 @@ with tab_expedientes:
                                 <div style="font-size:12px; color:#333; padding:6px 8px; background:#f8f9fa; border-radius:4px; border:1px solid #eee; min-height:40px;">{alergias}</div>
                             </div>
                         </div>
-                        """, unsafe_allow_html=True)
+                        """), unsafe_allow_html=True)
 
                     st.write("---")
                     st.subheader("📚 Historial de Cursos y Capacitaciones del Colaborador")
