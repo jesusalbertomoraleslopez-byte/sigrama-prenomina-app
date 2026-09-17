@@ -1918,6 +1918,90 @@ def _limpiar_texto(val) -> str:
     return "" if s in ("None", "nan", "NULL", "") else s
 
 
+def visualizar_documento_curso(nombre_archivo: str, key_prefix: str = ""):
+    """
+    Busca y visualiza un archivo de constancia/reconocimiento de curso (PDF o imagen).
+    Si no existe, ofrece la opción de cargarlo.
+    """
+    dir_docs = os.path.join(ruta_carpeta, "documentos_cursos").replace("\\", "/")
+    os.makedirs(dir_docs, exist_ok=True)
+    
+    if not nombre_archivo or str(nombre_archivo).strip() in ("", "nan", "None", "0"):
+        st.info("ℹ️ No hay un archivo o diploma registrado para este curso.")
+        up_new = st.file_uploader("📤 Cargar constancia (PDF o Imagen):", type=["pdf", "jpg", "jpeg", "png"], key=f"up_new_course_{key_prefix}_{hash(str(key_prefix))}")
+        if up_new is not None:
+            fn = up_new.name
+            dest = os.path.join(dir_docs, fn).replace("\\", "/")
+            with open(dest, "wb") as f_out:
+                f_out.write(up_new.getbuffer())
+            st.success(f"✅ Archivo **{fn}** cargado correctamente.")
+            st.rerun()
+        return
+
+    nombre_limpio = str(nombre_archivo).strip()
+    ruta_final = os.path.join(dir_docs, nombre_limpio).replace("\\", "/")
+
+    # Coincidencia exacta o por inicio
+    if not os.path.exists(ruta_final) and os.path.exists(dir_docs):
+        for f in os.listdir(dir_docs):
+            if f.lower() == nombre_limpio.lower() or (len(nombre_limpio) > 4 and f.lower().startswith(nombre_limpio.lower()[:12])):
+                ruta_final = os.path.join(dir_docs, f).replace("\\", "/")
+                nombre_limpio = f
+                break
+
+    if os.path.exists(ruta_final) and os.path.isfile(ruta_final):
+        ext = os.path.splitext(ruta_final)[1].lower()
+        st.success(f"📄 Archivo disponible: **{nombre_limpio}**")
+        
+        if ext == ".pdf":
+            try:
+                with open(ruta_final, "rb") as f_pdf:
+                    pdf_bytes = f_pdf.read()
+                base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600" type="application/pdf" style="border:1px solid #ccc; border-radius:6px; margin-bottom:10px;"></iframe>'
+                st.markdown(pdf_display, unsafe_allow_html=True)
+                st.download_button(
+                    label=f"📥 Descargar PDF ({nombre_limpio})",
+                    data=pdf_bytes,
+                    file_name=nombre_limpio,
+                    mime="application/pdf",
+                    key=f"dl_pdf_{key_prefix}_{abs(hash(nombre_limpio))}"
+                )
+            except Exception as e:
+                st.error(f"Error leyendo PDF: {e}")
+        elif ext in [".jpg", ".jpeg", ".png", ".webp"]:
+            try:
+                st.image(ruta_final, caption=f"Constancia — {nombre_limpio}", use_container_width=True)
+                with open(ruta_final, "rb") as f_img:
+                    st.download_button(
+                        label=f"📥 Descargar Imagen ({nombre_limpio})",
+                        data=f_img.read(),
+                        file_name=nombre_limpio,
+                        mime=f"image/{ext[1:]}",
+                        key=f"dl_img_{key_prefix}_{abs(hash(nombre_limpio))}"
+                    )
+            except Exception as e:
+                st.error(f"Error cargando imagen: {e}")
+        else:
+            with open(ruta_final, "rb") as f_gen:
+                st.download_button(
+                    label=f"📥 Descargar Documento ({nombre_limpio})",
+                    data=f_gen.read(),
+                    file_name=nombre_limpio,
+                    key=f"dl_gen_{key_prefix}_{abs(hash(nombre_limpio))}"
+                )
+    else:
+        st.warning(f"⚠️ Archivo no encontrado en el sistema: **{nombre_limpio}**. Puedes cargarlo a continuación:")
+        up_missing = st.file_uploader(f"📤 Subir constancia para **{nombre_limpio}**:", type=["pdf", "jpg", "jpeg", "png"], key=f"up_missing_{key_prefix}_{abs(hash(nombre_limpio))}")
+        if up_missing is not None:
+            dest = os.path.join(dir_docs, nombre_limpio).replace("\\", "/")
+            with open(dest, "wb") as f_out:
+                f_out.write(up_missing.getbuffer())
+            st.success(f"✅ Archivo **{nombre_limpio}** guardado exitosamente.")
+            st.rerun()
+
+
+
 with tab_expedientes:
     st.markdown("""
     <div style="background: linear-gradient(135deg, #111111 0%, #2c2c2c 100%);
@@ -2125,11 +2209,42 @@ with tab_expedientes:
                             hide_index=True
                         )
 
+                        st.markdown("#### 📄 Documentos y Constancias de Capacitación")
+                        for idx_c, r_c in df_emp_cursos.reset_index(drop=True).iterrows():
+                            c_nombre = r_c.get("Nombre_del_Curso", f"Curso {idx_c+1}")
+                            c_recono = r_c.get("Reconocimiento", "")
+                            lbl_exp = f"📖 {c_nombre}"
+                            if c_recono and str(c_recono).strip() not in ("", "nan", "None", "0"):
+                                lbl_exp += f" — 📄 Documento: {c_recono}"
+
+                            with st.expander(lbl_exp):
+                                visualizar_documento_curso(c_recono, key_prefix=f"emp_{num_ctrl}_idx_{idx_c}")
+
             # ─────────────────────────────────────────────
             # SUB-TAB 2: HISTORIAL DE CAPACITACIÓN
             # ─────────────────────────────────────────────
             with sub_cursos:
                 st.subheader("📚 Historial Completo de Capacitación")
+
+                with st.expander("📁 Cargador Masivo de Constancias y Diplomas de Cursos (PDF / Imágenes)"):
+                    st.markdown("Sube aquí reconocimientos, diplomas o constancias DC-3 en formato PDF o Imagen (JPG/PNG). Se guardarán automáticamente en la carpeta del sistema `asistencias/documentos_cursos/` y estarán disponibles en el expediente de cada trabajador.")
+                    up_bulk = st.file_uploader(
+                        "Selecciona uno o varios archivos (PDF, JPG, PNG):",
+                        type=["pdf", "jpg", "jpeg", "png"],
+                        accept_multiple_files=True,
+                        key="bulk_course_docs_uploader"
+                    )
+                    if up_bulk:
+                        dir_docs = os.path.join(ruta_carpeta, "documentos_cursos").replace("\\", "/")
+                        os.makedirs(dir_docs, exist_ok=True)
+                        guardados = 0
+                        for f_obj in up_bulk:
+                            dest_p = os.path.join(dir_docs, f_obj.name).replace("\\", "/")
+                            with open(dest_p, "wb") as f_out:
+                                f_out.write(f_obj.getbuffer())
+                            guardados += 1
+                        st.success(f"✅ {guardados} archivo(s) guardado(s) exitosamente en `asistencias/documentos_cursos/`.")
+                        st.rerun()
 
                 if df_cursos_acc.empty:
                     st.info("No hay registros de capacitación disponibles.")
