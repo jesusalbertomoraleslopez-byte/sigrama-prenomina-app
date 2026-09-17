@@ -2040,6 +2040,161 @@ def visualizar_documento_curso(nombre_archivo: str, key_prefix: str = ""):
 
 
 
+def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFrame, foto_path: str = None) -> io.BytesIO:
+    """
+    Genera el reporte ejecutivo completo en PDF de la Ficha Técnica del Colaborador.
+    """
+    from datetime import datetime
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, leftMargin=36, rightMargin=36, topMargin=36, bottomMargin=36)
+    styles = getSampleStyleSheet()
+    
+    h1_style = ParagraphStyle('H1', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=15, leading=18, textColor=colors.HexColor('#FFFFFF'), alignment=0)
+    sub_style = ParagraphStyle('Sub', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9.5, leading=12, textColor=colors.HexColor('#EC2024'))
+    sec_title = ParagraphStyle('SecTitle', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=11, leading=14, textColor=colors.HexColor('#111111'), spaceBefore=10, spaceAfter=4)
+    lbl_style = ParagraphStyle('Lbl', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8.5, leading=10, textColor=colors.HexColor('#555555'))
+    val_style = ParagraphStyle('Val', parent=styles['Normal'], fontName='Helvetica', fontSize=9, leading=11, textColor=colors.HexColor('#111111'))
+    tbl_hdr = ParagraphStyle('TblHdr', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, leading=10, textColor=colors.HexColor('#FFFFFF'))
+    tbl_cell = ParagraphStyle('TblCell', parent=styles['Normal'], fontName='Helvetica', fontSize=7.5, leading=9.5, textColor=colors.HexColor('#111111'))
+    
+    elements = []
+    
+    banner_data = [
+        [Paragraph('INDUSTRIA SIGRAMA S.A. DE C.V.', h1_style), Paragraph(f"Fecha: {datetime.now().strftime('%d/%m/%Y')}", ParagraphStyle('Dt', parent=h1_style, fontSize=9, alignment=2, textColor=colors.HexColor('#DDDDDD')))],
+        [Paragraph('FICHA TÉCNICA DEL COLABORADOR Y EXPEDIENTE DIGITAL DE CAPACITACIÓN', sub_style), '']
+    ]
+    banner_tbl = Table(banner_data, colWidths=[380, 160])
+    banner_tbl.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#111111')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('SPAN', (0,1), (1,1)),
+        ('PADDING', (0,0), (-1,-1), 8),
+        ('BOTTOMPADDING', (0,1), (-1,1), 10)
+    ]))
+    elements.append(banner_tbl)
+    elements.append(Spacer(1, 10))
+    
+    num_ctrl = _limpiar_texto(row_personal.get('Numero_Control_Personal', '')).zfill(5)
+    nombre = _limpiar_texto(row_personal.get('Nombre_Empleado_Robotica', ''))
+    puesto = _limpiar_texto(row_personal.get('Puesto', ''))
+    ingreso = str(row_personal.get('Fecha_de_Ingreso', ''))[:10]
+    curp = _limpiar_texto(row_personal.get('CURP', ''))
+    rfc = _limpiar_texto(row_personal.get('RFC', ''))
+    nss = _limpiar_texto(row_personal.get('NSS', ''))
+    sangre = _limpiar_texto(row_personal.get('Tipo_Sangre', ''))
+    telefono = _limpiar_texto(row_personal.get('Telefono:', ''))
+    padecim = _limpiar_texto(row_personal.get('Padecimientos:', ''))
+    alergias = _limpiar_texto(row_personal.get('Alergias:', ''))
+    
+    datos_left = [
+        [Paragraph('Nº CONTROL:', lbl_style), Paragraph(f'<b>{num_ctrl}</b>', val_style)],
+        [Paragraph('COLABORADOR:', lbl_style), Paragraph(nombre, val_style)],
+        [Paragraph('PUESTO:', lbl_style), Paragraph(f'<b>{puesto}</b>', val_style)],
+        [Paragraph('FECHA INGRESO:', lbl_style), Paragraph(ingreso, val_style)],
+        [Paragraph('CURP:', lbl_style), Paragraph(curp, val_style)],
+        [Paragraph('RFC:', lbl_style), Paragraph(rfc, val_style)],
+        [Paragraph('NSS:', lbl_style), Paragraph(nss, val_style)],
+    ]
+    tbl_datos_left = Table(datos_left, colWidths=[95, 245])
+    tbl_datos_left.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+        ('TOPPADDING', (0,0), (-1,-1), 3),
+        ('LINEBELOW', (0,0), (-1,-1), 0.5, colors.HexColor('#EEEEEE'))
+    ]))
+    
+    img_flowable = Paragraph('<br/><br/><i>Sin Foto Oficial</i>', ParagraphStyle('NoFoto', alignment=1, textColor=colors.HexColor('#888888')))
+    if foto_path and os.path.exists(foto_path):
+        try:
+            img_flowable = Image(foto_path, width=120, height=140)
+        except Exception:
+            pass
+            
+    tbl_foto_box = Table([[img_flowable]], colWidths=[140])
+    tbl_foto_box.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8F9FA')),
+        ('BOX', (0,0), (-1,-1), 1, colors.HexColor('#CCCCCC')),
+        ('PADDING', (0,0), (-1,-1), 4)
+    ]))
+    
+    profile_table = Table([[tbl_datos_left, tbl_foto_box]], colWidths=[365, 175])
+    profile_table.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'TOP')
+    ]))
+    elements.append(profile_table)
+    elements.append(Spacer(1, 8))
+    
+    elements.append(Paragraph('🩸 DATOS MÉDICOS Y DE CONTACTO', sec_title))
+    elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#EC2024'), spaceBefore=1, spaceAfter=6))
+    
+    med_data = [
+        [Paragraph('TIPO DE SANGRE:', lbl_style), Paragraph(f'<b>{sangre if sangre else "N/D"}</b>', val_style), Paragraph('TELÉFONO:', lbl_style), Paragraph(telefono if telefono else 'N/D', val_style)],
+        [Paragraph('PADECIMIENTOS:', lbl_style), Paragraph(padecim if padecim else 'Ninguno', val_style), Paragraph('ALERGIAS:', lbl_style), Paragraph(alergias if alergias else 'Ninguna', val_style)]
+    ]
+    tbl_med = Table(med_data, colWidths=[95, 175, 75, 195])
+    tbl_med.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor('#F8F9FA')),
+        ('BOX', (0,0), (-1,-1), 0.5, colors.HexColor('#DDDDDD')),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('PADDING', (0,0), (-1,-1), 5)
+    ]))
+    elements.append(tbl_med)
+    elements.append(Spacer(1, 10))
+    
+    elements.append(Paragraph('📚 MATRIZ DE CAPACITACIÓN Y HISTORIAL DE CURSOS', sec_title))
+    elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#111111'), spaceBefore=1, spaceAfter=6))
+    
+    if df_emp_cursos.empty:
+        elements.append(Paragraph('<i>No se registraron cursos de capacitación para este colaborador.</i>', val_style))
+    else:
+        cursos_table_data = [[
+            Paragraph('CURSO', tbl_hdr),
+            Paragraph('HORAS', tbl_hdr),
+            Paragraph('CONSTANCIA / DIPLOMA', tbl_hdr),
+            Paragraph('FECHA', tbl_hdr),
+            Paragraph('DC-3', tbl_hdr),
+            Paragraph('IMPARTIDO POR', tbl_hdr)
+        ]]
+        
+        for _, r_c in df_emp_cursos.iterrows():
+            c_nombre = _limpiar_texto(r_c.get('Nombre_del_Curso', ''))
+            c_hrs = _limpiar_texto(r_c.get('Horas_Invertidas', ''))
+            c_doc = _limpiar_texto(r_c.get('Reconocimiento', ''))
+            c_fec = str(r_c.get('Fecha_del_curso', ''))[:10]
+            c_dc3 = 'SÍ' if _limpiar_texto(r_c.get('DCIII', '')) else 'NO'
+            c_imp = _limpiar_texto(r_c.get('Quien_imparte', ''))
+            
+            cursos_table_data.append([
+                Paragraph(c_nombre, tbl_cell),
+                Paragraph(c_hrs, tbl_cell),
+                Paragraph(c_doc if c_doc else 'Sin Archivo', tbl_cell),
+                Paragraph(c_fec, tbl_cell),
+                Paragraph(f'<b>{c_dc3}</b>', tbl_cell),
+                Paragraph(c_imp, tbl_cell)
+            ])
+            
+        tbl_cursos = Table(cursos_table_data, colWidths=[160, 45, 145, 65, 35, 90])
+        tbl_cursos.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#111111')),
+            ('ALIGN', (1,0), (1,-1), 'CENTER'),
+            ('ALIGN', (3,0), (4,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#DDDDDD')),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F9F9F9')]),
+            ('PADDING', (0,0), (-1,-1), 4)
+        ]))
+        elements.append(tbl_cursos)
+        
+    elements.append(Spacer(1, 15))
+    elements.append(Paragraph('<br/><br/>______________________________________<br/><b>DIRECCIÓN DE CAPITAL HUMANO</b><br/>Industria Sigrama S.A. de C.V.', ParagraphStyle('Firma', alignment=1, fontName='Helvetica', fontSize=8, textColor=colors.HexColor('#555555'))))
+    
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer
+
+
 with tab_expedientes:
     st.markdown("""
     <div style="background: linear-gradient(135deg, #111111 0%, #2c2c2c 100%);
@@ -2126,7 +2281,9 @@ with tab_expedientes:
                 ids_emp     = df_personal_acc.get("Numero_Control_Personal", pd.Series(dtype=str)).tolist()
                 opciones    = [f"{str(nid).zfill(5)} — {nom.strip()}" for nid, nom in zip(ids_emp, nombres_emp)]
                 
-                sel = st.selectbox("🔍 Selecciona el Colaborador para consultar su Ficha Técnica:", opciones, key="ficha_sel_emp")
+                col_sel1, col_sel2 = st.columns([3, 1])
+                with col_sel1:
+                    sel = st.selectbox("🔍 Selecciona el Colaborador para consultar su Ficha Técnica:", opciones, key="ficha_sel_emp")
 
                 if sel:
                     idx_sel = opciones.index(sel)
@@ -2143,6 +2300,30 @@ with tab_expedientes:
                     telefono    = _limpiar_texto(fila.get("Telefono:", "")) or "N/D"
                     padecim     = _limpiar_texto(fila.get("Padecimientos:", "")) or "NINGUNO"
                     alergias    = _limpiar_texto(fila.get("Alergias:", "")) or "NINGUNA"
+
+                    # Filtrar cursos del empleado
+                    if not df_cursos_acc.empty and "Empleado" in df_cursos_acc.columns:
+                        df_emp_cursos = df_cursos_acc[
+                            df_cursos_acc["Empleado"].astype(str).str.strip().str.zfill(5) == num_ctrl.zfill(5)
+                        ].copy()
+                    else:
+                        df_emp_cursos = pd.DataFrame()
+
+                    # Buscar foto oficial si existe
+                    foto_path1 = os.path.join(ruta_carpeta, "fotos", f"foto_{num_ctrl}.jpg").replace("\\", "/")
+                    foto_path2 = os.path.join(ruta_carpeta, "fotos", f"foto_{int(num_ctrl):05d}.jpg").replace("\\", "/")
+                    foto_final = foto_path1 if os.path.exists(foto_path1) else (foto_path2 if os.path.exists(foto_path2) else None)
+
+                    with col_sel2:
+                        st.write("") # Espaciador
+                        pdf_ficha_bytes = generar_pdf_ficha_empleado(fila, df_emp_cursos, foto_path=foto_final)
+                        st.download_button(
+                            label="📄 Descargar Ficha Técnica PDF",
+                            data=pdf_ficha_bytes,
+                            file_name=f"Ficha_Tecnica_{num_ctrl}_{nombre_disp.replace(' ', '_')}.pdf",
+                            mime="application/pdf",
+                            key=f"btn_dl_ficha_pdf_{num_ctrl}"
+                        )
 
                     # Formato de 3 Columnas Fiel al Formulario de Access
                     c_left, c_photo, c_right = st.columns([2.5, 1.8, 2])
