@@ -1981,96 +1981,171 @@ with tab_expedientes:
             ])
 
             # ─────────────────────────────────────────────
-            # SUB-TAB 1: FICHA DEL COLABORADOR
+            # SUB-TAB 1: FICHA DEL COLABORADOR (FORMULARIO ACCESS RECONSTRUIDO)
             # ─────────────────────────────────────────────
             with sub_ficha:
-                st.subheader("👤 Expediente Digital del Colaborador")
+                # Encabezado estilo Access / Sigrama
+                st.markdown("""
+                <div style="background: linear-gradient(90deg, #EC2024 0%, #111111 100%);
+                            border-radius: 8px; padding: 14px 20px; margin-bottom: 20px; display: flex;
+                            align-items: center; justify-content: space-between; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                    <div style="color: white; font-family: 'Montserrat', sans-serif;">
+                        <span style="font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.9;">PLANTA METALES SIGRAMA</span>
+                        <h3 style="margin: 0; font-size: 20px; font-weight: bold; color: white;">PERSONAL Y CAPACITACIÓN</h3>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 20px; color: white; font-size: 12px; font-weight: bold;">
+                        EXPEDIENTE TÉCNICO DIGITAL
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
-                col_sel, col_info = st.columns([1, 2])
-
-                with col_sel:
-                    nombres_emp = df_personal_acc.get("Nombre_Empleado_Robotica",
-                                                       pd.Series(dtype=str)).tolist()
-                    ids_emp     = df_personal_acc.get("Numero_Control_Personal",
-                                                       pd.Series(dtype=str)).tolist()
-                    opciones    = [f"{nid} — {nom}" for nid, nom in zip(ids_emp, nombres_emp)]
-                    sel         = st.selectbox("🔍 Selecciona un colaborador:", opciones, key="ficha_sel_emp")
+                nombres_emp = df_personal_acc.get("Nombre_Empleado_Robotica", pd.Series(dtype=str)).tolist()
+                ids_emp     = df_personal_acc.get("Numero_Control_Personal", pd.Series(dtype=str)).tolist()
+                opciones    = [f"{str(nid).zfill(5)} — {nom.strip()}" for nid, nom in zip(ids_emp, nombres_emp)]
+                
+                sel = st.selectbox("🔍 Selecciona el Colaborador para consultar su Ficha Técnica:", opciones, key="ficha_sel_emp")
 
                 if sel:
                     idx_sel = opciones.index(sel)
                     fila    = df_personal_acc.iloc[idx_sel]
 
-                    with col_info:
-                        nombre_disp = _limpiar_texto(fila.get("Nombre_Empleado_Robotica", ""))
-                        id_disp     = _limpiar_texto(fila.get("Numero_Control_Personal", ""))
-                        puesto_disp = _limpiar_texto(fila.get("Puesto", ""))
-                        ingreso     = _limpiar_texto(fila.get("Fecha_de_Ingreso", ""))
+                    num_ctrl    = _limpiar_texto(fila.get("Numero_Control_Personal", "")).zfill(5)
+                    nombre_disp = _limpiar_texto(fila.get("Nombre_Empleado_Robotica", ""))
+                    puesto_disp = _limpiar_texto(fila.get("Puesto", ""))
+                    ingreso     = _limpiar_texto(fila.get("Fecha_de_Ingreso", ""))
+                    curp        = _limpiar_texto(fila.get("CURP", ""))
+                    rfc         = _limpiar_texto(fila.get("RFC", ""))
+                    nss         = _limpiar_texto(fila.get("NSS", ""))
+                    sangre      = _limpiar_texto(fila.get("Tipo_Sangre", "")) or "N/D"
+                    telefono    = _limpiar_texto(fila.get("Telefono:", "")) or "N/D"
+                    padecim     = _limpiar_texto(fila.get("Padecimientos:", "")) or "NINGUNO"
+                    alergias    = _limpiar_texto(fila.get("Alergias:", "")) or "NINGUNA"
 
+                    # Formato de 3 Columnas Fiel al Formulario de Access
+                    c_left, c_photo, c_right = st.columns([2.5, 1.8, 2])
+
+                    with c_left:
                         st.markdown(f"""
-                        <div style="background:#f8f9fa; border-left: 4px solid #EC2024;
-                                    border-radius: 8px; padding: 20px; margin-bottom: 16px;">
-                            <h3 style="color:#111111; margin:0 0 4px 0; font-family:'Montserrat',sans-serif;">
-                                {nombre_disp}
-                            </h3>
-                            <p style="color:#EC2024; font-weight:bold; margin:0 0 8px 0;">
-                                ID: {id_disp} &nbsp;|&nbsp; {puesto_disp}
-                            </p>
-                            <p style="color:#555; font-size:13px; margin:0;">
-                                📅 Fecha de ingreso: {ingreso if ingreso else "No registrada"}
-                            </p>
+                        <div style="background: #ffffff; border: 1px solid #e0e0e0; border-top: 4px solid #EC2024; border-radius: 8px; padding: 16px; margin-bottom: 14px;">
+                            <div style="display:flex; justify-space-between; align-items:center; margin-bottom:8px;">
+                                <span style="background:#EC2024; color:white; padding:3px 10px; border-radius:4px; font-weight:bold; font-size:12px;">Numero de Control</span>
+                                <span style="font-family:monospace; font-size:16px; font-weight:bold; color:#111;">{num_ctrl}</span>
+                            </div>
+                            <label style="font-size:11px; color:#666; font-weight:bold; display:block; margin-top:8px;">EMPLEADO</label>
+                            <div style="font-size:15px; font-weight:bold; color:#111; padding:6px 10px; background:#f8f9fa; border-radius:4px; border:1px solid #eee; margin-bottom:8px;">{nombre_disp}</div>
+                            
+                            <label style="font-size:11px; color:#666; font-weight:bold; display:block;">PUESTO</label>
+                            <div style="font-size:13px; font-weight:600; color:#EC2024; padding:6px 10px; background:#fff8f8; border-radius:4px; border:1px solid #ffd8d8; margin-bottom:8px;">{puesto_disp if puesto_disp else 'Sin Asignar'}</div>
+                            
+                            <div style="display:flex; gap:10px;">
+                                <div style="flex:1;">
+                                    <label style="font-size:11px; color:#666; font-weight:bold; display:block;">FECHA DE INGRESO</label>
+                                    <div style="font-size:12px; padding:5px 8px; background:#f8f9fa; border-radius:4px; border:1px solid #eee;">{ingreso[:10] if ingreso else 'N/D'}</div>
+                                </div>
+                                <div style="flex:1;">
+                                    <label style="font-size:11px; color:#666; font-weight:bold; display:block;">CURP</label>
+                                    <div style="font-size:12px; font-family:monospace; padding:5px 8px; background:#f8f9fa; border-radius:4px; border:1px solid #eee;">{curp if curp else 'N/D'}</div>
+                                </div>
+                            </div>
+                            
+                            <div style="display:flex; gap:10px; margin-top:8px;">
+                                <div style="flex:1;">
+                                    <label style="font-size:11px; color:#666; font-weight:bold; display:block;">RFC</label>
+                                    <div style="font-size:12px; font-family:monospace; padding:5px 8px; background:#f8f9fa; border-radius:4px; border:1px solid #eee;">{rfc if rfc else 'N/D'}</div>
+                                </div>
+                                <div style="flex:1;">
+                                    <label style="font-size:11px; color:#666; font-weight:bold; display:block;">NSS</label>
+                                    <div style="font-size:12px; font-family:monospace; padding:5px 8px; background:#f8f9fa; border-radius:4px; border:1px solid #eee;">{nss if nss else 'N/D'}</div>
+                                </div>
+                            </div>
                         </div>
                         """, unsafe_allow_html=True)
 
-                    # Expediente en grid
-                    campos_expte = {
-                        "🪪 CURP":          fila.get("CURP", ""),
-                        "📋 RFC":            fila.get("RFC", ""),
-                        "🏥 NSS":            fila.get("NSS", ""),
-                        "🩸 Tipo de Sangre": fila.get("Tipo_Sangre", ""),
-                        "⚠️ Padecimientos":  fila.get("Padecimientos:", ""),
-                        "🌿 Alergias":       fila.get("Alergias:", ""),
-                        "📞 Teléfono":       fila.get("Telefono:", ""),
-                    }
+                    with c_photo:
+                        # Buscar foto extraída foto_{num_ctrl}.jpg o foto_{int(num_ctrl)}.jpg
+                        foto_path1 = os.path.join(ruta_carpeta, "fotos", f"foto_{num_ctrl}.jpg").replace("\\", "/")
+                        foto_path2 = os.path.join(ruta_carpeta, "fotos", f"foto_{int(num_ctrl):05d}.jpg").replace("\\", "/")
+                        foto_final = foto_path1 if os.path.exists(foto_path1) else (foto_path2 if os.path.exists(foto_path2) else None)
 
-                    g1, g2 = st.columns(2)
-                    items = list(campos_expte.items())
-                    for i, (campo, valor) in enumerate(items):
-                        val_clean = _limpiar_texto(valor) or "—"
-                        target_col = g1 if i % 2 == 0 else g2
-                        target_col.markdown(f"""
-                        <div style="background:#ffffff; border: 1px solid #e0e0e0;
-                                    border-radius: 6px; padding: 12px 16px; margin-bottom: 10px;">
-                            <span style="font-size:12px; color:#888; display:block;">{campo}</span>
-                            <span style="font-size:15px; font-weight:600; color:#111;">{val_clean}</span>
+                        st.markdown("<div style='text-align:center; padding: 4px; background:#ffffff; border:1px solid #e0e0e0; border-radius:8px;'>", unsafe_allow_html=True)
+                        if foto_final and os.path.exists(foto_final):
+                            st.image(foto_final, caption=f"Fotografía Oficial — {nombre_disp}", use_container_width=True)
+                        else:
+                            st.markdown("""
+                            <div style="padding: 40px 10px; background:#f8f9fa; border-radius:6px; border: 2px dashed #ccc; text-align:center;">
+                                <span style="font-size: 48px;">👤</span>
+                                <p style="margin: 8px 0 0 0; color:#888; font-size:12px;">Sin Fotografía Registrada</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+                    with c_right:
+                        st.markdown(f"""
+                        <div style="background: #ffffff; border: 1px solid #e0e0e0; border-top: 4px solid #111111; border-radius: 8px; padding: 16px; margin-bottom: 14px;">
+                            <div style="margin-bottom:10px;">
+                                <span style="background:#111111; color:white; padding:3px 10px; border-radius:4px; font-weight:bold; font-size:11px;">Tipo de Sangre</span>
+                                <div style="font-size:16px; font-weight:bold; color:#EC2024; margin-top:4px; padding:4px 8px; background:#fff8f8; border-radius:4px; border:1px solid #ffd8d8;">🩸 {sangre}</div>
+                            </div>
+                            
+                            <div style="margin-bottom:10px;">
+                                <span style="background:#111111; color:white; padding:3px 10px; border-radius:4px; font-weight:bold; font-size:11px;">Telefono:</span>
+                                <div style="font-size:14px; font-weight:bold; color:#111; margin-top:4px; padding:4px 8px; background:#f8f9fa; border-radius:4px; border:1px solid #eee;">📞 {telefono}</div>
+                            </div>
+
+                            <div style="margin-bottom:10px;">
+                                <label style="font-size:11px; color:#666; font-weight:bold; display:block;">Padecimientos:</label>
+                                <div style="font-size:12px; color:#333; padding:6px 8px; background:#f8f9fa; border-radius:4px; border:1px solid #eee; min-height:40px;">{padecim}</div>
+                            </div>
+
+                            <div>
+                                <label style="font-size:11px; color:#666; font-weight:bold; display:block;">Alergias:</label>
+                                <div style="font-size:12px; color:#333; padding:6px 8px; background:#f8f9fa; border-radius:4px; border:1px solid #eee; min-height:40px;">{alergias}</div>
+                            </div>
                         </div>
                         """, unsafe_allow_html=True)
 
-                    # Cursos de este colaborador
-                    st.markdown("#### 📚 Capacitaciones registradas")
-                    emp_id_str = _limpiar_texto(fila.get("Numero_Control_Personal", ""))
-                    if "Empleado" in df_cursos_acc.columns:
+                    st.write("---")
+                    st.subheader("📚 Historial de Cursos y Capacitaciones del Colaborador")
+
+                    # Filtrar cursos por Empleado == num_ctrl o int(num_ctrl)
+                    if not df_cursos_acc.empty and "Empleado" in df_cursos_acc.columns:
                         df_emp_cursos = df_cursos_acc[
-                            df_cursos_acc["Empleado"].str.strip() == emp_id_str
+                            df_cursos_acc["Empleado"].astype(str).str.strip().str.zfill(5) == num_ctrl.zfill(5)
                         ].copy()
                     else:
                         df_emp_cursos = pd.DataFrame()
 
                     if df_emp_cursos.empty:
-                        st.info("Este colaborador no tiene cursos registrados en la base de datos.")
+                        st.info(f"💡 No hay capacitaciones registradas en la base de datos para el colaborador {num_ctrl}.")
                     else:
-                        cols_vis = [c for c in [
-                            "Nombre_del_Curso", "Fecha_del_curso", "Horas_Invertidas",
-                            "Quien_imparte", "DCIII", "Donde_curso", "Competencias_adquiridas"
+                        st.markdown(f"**{len(df_emp_cursos)}** capacitación(es) registrada(s) para **{nombre_disp}**:")
+                        
+                        cols_mostrar = [c for c in [
+                            "Nombre_del_Curso", "Horas_Invertidas", "Reconocimiento",
+                            "Fecha_del_curso", "Cierre_del_Curso", "DCIII",
+                            "Cerificion_del_curso", "Valor_Curricular", "Donde_curso",
+                            "Quien_imparte", "Competencias_adquiridas"
                         ] if c in df_emp_cursos.columns]
+
+                        df_table_show = df_emp_cursos[cols_mostrar].copy()
+                        if "Fecha_del_curso" in df_table_show.columns:
+                            df_table_show["Fecha_del_curso"] = df_table_show["Fecha_del_curso"].apply(lambda v: str(v)[:10] if pd.notna(v) else "")
+                        if "Cierre_del_Curso" in df_table_show.columns:
+                            df_table_show["Cierre_del_Curso"] = df_table_show["Cierre_del_Curso"].apply(lambda v: str(v)[:10] if pd.notna(v) else "")
+
                         st.dataframe(
-                            df_emp_cursos[cols_vis].rename(columns={
-                                "Nombre_del_Curso": "Curso",
-                                "Fecha_del_curso": "Fecha",
+                            df_table_show.rename(columns={
+                                "Nombre_del_Curso": "Nombre",
                                 "Horas_Invertidas": "Horas",
-                                "Quien_imparte": "Impartidor",
-                                "DCIII": "Constancia DC-3",
-                                "Donde_curso": "Lugar",
-                                "Competencias_adquiridas": "Competencias"
+                                "Reconocimiento": "Diploma",
+                                "Fecha_del_curso": "Fecha_del_curso",
+                                "Cierre_del_Curso": "Cierre_del_Curso",
+                                "DCIII": "DC3",
+                                "Cerificion_del_curso": "Certificación",
+                                "Valor_Curricular": "Curricular",
+                                "Donde_curso": "Entrenado en:",
+                                "Quien_imparte": "Quien imparte",
+                                "Competencias_adquiridas": "Competencias Adquiridas"
                             }),
                             use_container_width=True,
                             hide_index=True
