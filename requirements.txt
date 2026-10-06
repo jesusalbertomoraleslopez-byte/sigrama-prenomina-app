@@ -6,6 +6,4 @@ xlrd
 openpyxl
 xlsxwriter
 reportlab
-PyMuPDF
-pypdfium2
-
+google-cloud-storage

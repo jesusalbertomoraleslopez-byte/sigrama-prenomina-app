@@ -347,6 +347,25 @@ ARCHIVO_HISTORICO = os.path.join(ruta_carpeta, "historico_semanal.xlsx").replace
 if not os.path.exists(ruta_carpeta):
     os.makedirs(ruta_carpeta)
 
+# --- Sincronización transparente con Google Cloud Storage (Cloud Run) ---
+if os.environ.get("GCS_BUCKET"):
+    try:
+        import gcs_sync
+        if "_gcs_initial_sync" not in st.session_state:
+            gcs_sync.sync_from_gcs()
+            st.session_state["_gcs_initial_sync"] = True
+    except Exception as _e_init:
+        print(f"Error sincronizando GCS al iniciar: {_e_init}")
+
+def guardar_archivo_sync(ruta_archivo):
+    """Sincroniza un archivo local con GCS si GCS_BUCKET está activo."""
+    if os.environ.get("GCS_BUCKET"):
+        try:
+            import gcs_sync
+            gcs_sync.push_file_to_gcs(ruta_archivo)
+        except Exception as _e:
+            print(f"Error sincronizando {ruta_archivo} con GCS: {_e}")
+
 # --- RECONOCIMIENTO DEL TOKEN DESDE SECRETS ---
 try:
     GITHUB_TOKEN = st.secrets["github"]["token"]
@@ -608,6 +627,7 @@ if st.session_state["usuario_rol"] is not None:
                         ruta_local = os.path.join(ruta_carpeta, nombre_archivo).replace("\\", "/")
                         with open(ruta_local, "wb") as f:
                             f.write(archivo.getbuffer())
+                        guardar_archivo_sync(ruta_local)
                         
                         # 2. Subir a GitHub si hay token
                         if GITHUB_TOKEN:
@@ -643,6 +663,7 @@ if st.session_state["usuario_rol"] is not None:
                     df_hist_new = recalcular_historico_completo(ruta_carpeta, ARCHIVO_PERSONAL, hora_limite_input)
                     if not df_hist_new.empty:
                         df_hist_new.to_excel(ARCHIVO_HISTORICO, index=False)
+                        guardar_archivo_sync(ARCHIVO_HISTORICO)
                         if GITHUB_TOKEN:
                             url_api_hist = f"https://api.github.com/repos/{REPO_NAME}/contents/asistencias/historico_semanal.xlsx"
                             headers_github = {
@@ -945,6 +966,7 @@ with tab_areas:
             try:
                 # 1. Guardar archivo de forma local en el servidor de Streamlit
                 df_editor.to_excel(ARCHIVO_PERSONAL, index=False)
+                guardar_archivo_sync(ARCHIVO_PERSONAL)
                 
                 # 2. Subir de forma automática el archivo actualizado a tu Repositorio de GitHub
                 if GITHUB_TOKEN:
