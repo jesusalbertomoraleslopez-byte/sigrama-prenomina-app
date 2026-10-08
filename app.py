@@ -319,12 +319,16 @@ hr {
 # ==============================================================================
 # ENCABEZADO INSTITUCIONAL - BANNER DE RECURSOS HUMANOS
 # ==============================================================================
-NOMBRE_BANNER = "RH BANNER APP.png"
-
-# Verificamos si el archivo del banner existe en la raíz del repositorio de GitHub
-if os.path.exists(NOMBRE_BANNER):
+_banner_path = Path(__file__).resolve().parent / "RH BANNER APP.png"
+if _banner_path.exists():
     st.image(
-        NOMBRE_BANNER, 
+        str(_banner_path), 
+        use_container_width=True,
+        caption="Industria Sigrama S.A. de C.V. | Dirección Humana, Resultados e Innovación"
+    )
+elif os.path.exists("RH BANNER APP.png"):
+    st.image(
+        "RH BANNER APP.png", 
         use_container_width=True,
         caption="Industria Sigrama S.A. de C.V. | Dirección Humana, Resultados e Innovación"
     )
