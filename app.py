@@ -18,6 +18,8 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import textwrap
+import time
+
 
 
 # Configuración estética de la interfaz del navegador
@@ -1935,9 +1937,19 @@ import json as _json
 
 @st.cache_data(ttl=300, show_spinner=False)
 def leer_tabla_access(tabla: str) -> pd.DataFrame:
-    """Lee una tabla de la base de datos Access usando PowerShell 32-bit + ACE OLEDB, o usa el respaldo CSV."""
+    """Lee una tabla de la base de datos de Capital Humano (CSV local o respaldo Access)."""
     df_res = pd.DataFrame()
-    if os.path.exists(PS32) and os.path.exists(RUTA_ACCESS_DB):
+    csv_path = os.path.join(ruta_carpeta, f"access_{tabla}.csv").replace("\\", "/")
+
+    # 1. Archivo CSV local como fuente principal
+    if os.path.exists(csv_path):
+        try:
+            df_res = pd.read_csv(csv_path, dtype=str).fillna("")
+        except Exception:
+            pass
+
+    # 2. Si no existe CSV pero existe Access DB y PowerShell 32-bit
+    if df_res.empty and os.path.exists(PS32) and os.path.exists(RUTA_ACCESS_DB):
         ps_script = f"""
 $conn = New-Object -ComObject ADODB.Connection
 $conn.Open("Provider=Microsoft.ACE.OLEDB.16.0;Data Source={RUTA_ACCESS_DB};")
@@ -1972,18 +1984,29 @@ $rows | ConvertTo-Json -Depth 3
                     raw = f"[{raw}]"
                 datos = _json.loads(raw)
                 df_res = pd.DataFrame(datos)
+                if not df_res.empty:
+                    os.makedirs(ruta_carpeta, exist_ok=True)
+                    df_res.to_csv(csv_path, index=False, encoding="utf-8")
         except Exception:
             pass
 
-    # Fallback transparente a los archivos respaldados de Access (.csv)
-    if df_res.empty:
-        csv_path = os.path.join(ruta_carpeta, f"access_{tabla}.csv").replace("\\", "/")
-        if os.path.exists(csv_path):
-            try:
-                df_res = pd.read_csv(csv_path, dtype=str).fillna("")
-            except Exception:
-                pass
     return df_res
+
+
+def guardar_tabla_access(tabla: str, df: pd.DataFrame):
+    """Guarda un DataFrame en su archivo CSV en asistencias/ y limpia la caché para actualización inmediata."""
+    os.makedirs(ruta_carpeta, exist_ok=True)
+    csv_path = os.path.join(ruta_carpeta, f"access_{tabla}.csv").replace("\\", "/")
+    df.to_csv(csv_path, index=False, encoding="utf-8")
+    try:
+        leer_tabla_access.clear()
+    except Exception:
+        pass
+    try:
+        st.cache_data.clear()
+    except Exception:
+        pass
+
 
 
 def _limpiar_texto(val) -> str:
@@ -2386,9 +2409,16 @@ with tab_expedientes:
 
             st.markdown("---")
 
+            # Generar lista de opciones de colaboradores para todos los sub-tabs
+            nombres_emp = df_personal_acc.get("Nombre_Empleado_Robotica", pd.Series(dtype=str)).tolist()
+            ids_emp     = df_personal_acc.get("Numero_Control_Personal", pd.Series(dtype=str)).tolist()
+            opciones    = [f"{str(nid).zfill(5)} — {nom.strip()}" for nid, nom in zip(ids_emp, nombres_emp)]
+
             # ====== SUB-PESTAÑAS ======
-            sub_ficha, sub_cursos, sub_dashboard, sub_catalogos = st.tabs([
+            sub_ficha, sub_alta_personal, sub_alta_cursos, sub_cursos, sub_dashboard, sub_catalogos = st.tabs([
                 "👤 Ficha del Colaborador",
+                "➕ Alta y Edición de Personal",
+                "🎓 Registrar Cursos & DC-3",
                 "📚 Historial de Capacitación",
                 "📊 Dashboard DC-3",
                 "📋 Catálogos"
@@ -2413,10 +2443,6 @@ with tab_expedientes:
                 </div>
                 """, unsafe_allow_html=True)
 
-                nombres_emp = df_personal_acc.get("Nombre_Empleado_Robotica", pd.Series(dtype=str)).tolist()
-                ids_emp     = df_personal_acc.get("Numero_Control_Personal", pd.Series(dtype=str)).tolist()
-                opciones    = [f"{str(nid).zfill(5)} — {nom.strip()}" for nid, nom in zip(ids_emp, nombres_emp)]
-                
                 col_sel1, col_sel2 = st.columns([3, 1])
                 with col_sel1:
                     sel = st.selectbox("🔍 Selecciona el Colaborador para consultar su Ficha Técnica:", opciones, key="ficha_sel_emp")
@@ -2515,13 +2541,8 @@ with tab_expedientes:
                     st.write("---")
                     st.subheader("📚 Historial de Cursos y Capacitaciones del Colaborador")
 
-                    # Filtrar cursos por Empleado == num_ctrl o int(num_ctrl)
-                    if not df_cursos_acc.empty and "Empleado" in df_cursos_acc.columns:
-                        df_emp_cursos = df_cursos_acc[
-                            df_cursos_acc["Empleado"].astype(str).str.strip().str.zfill(5) == num_ctrl.zfill(5)
-                        ].copy()
-                    else:
-                        df_emp_cursos = pd.DataFrame()
+                    # Filtrar cursos por Empleado usando función robusta con soporte para números legacy
+                    df_emp_cursos = obtener_cursos_empleado(df_cursos_acc, num_ctrl, nombre_disp)
 
                     if df_emp_cursos.empty:
                         st.info(f"💡 No hay capacitaciones registradas en la base de datos para el colaborador {num_ctrl}.")
@@ -2571,7 +2592,398 @@ with tab_expedientes:
                                 visualizar_documento_curso(c_recono, key_prefix=f"emp_{num_ctrl}_idx_{idx_c}")
 
             # ─────────────────────────────────────────────
-            # SUB-TAB 2: HISTORIAL DE CAPACITACIÓN
+            # SUB-TAB 2: ALTA Y EDICIÓN DE PERSONAL
+            # ─────────────────────────────────────────────
+            with sub_alta_personal:
+                st.markdown("""
+                <div style="background: linear-gradient(90deg, #111111 0%, #2b2b2b 100%);
+                            border-left: 5px solid #EC2024; border-radius: 8px; padding: 14px 20px; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: white; font-family: 'Montserrat', sans-serif;">➕ Alta y Edición de Personal de Planta</h3>
+                    <p style="margin: 4px 0 0 0; color: #d2d3d5; font-size: 13px;">Registra nuevos colaboradores de la planta o modifica los datos oficiales, médicos y fotografía del personal existente.</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                col_modo1, col_modo2 = st.columns([1, 2])
+                with col_modo1:
+                    modo_personal = st.radio(
+                        "Tipo de Operación:",
+                        ["➕ Registrar Nuevo Colaborador", "✏️ Editar Colaborador Existente"],
+                        key="rad_modo_personal"
+                    )
+
+                emp_edit_row = None
+                if modo_personal == "✏️ Editar Colaborador Existente":
+                    with col_modo2:
+                        sel_emp_a_editar = st.selectbox(
+                            "Selecciona el Colaborador a modificar:",
+                            opciones,
+                            key="sel_emp_a_editar"
+                        )
+                        if sel_emp_a_editar:
+                            idx_edit = opciones.index(sel_emp_a_editar)
+                            emp_edit_row = df_personal_acc.iloc[idx_edit]
+                else:
+                    with col_modo2:
+                        st.info("💡 Completa la información para registrar a un nuevo trabajador en el sistema de Recursos Humanos.")
+
+                # Determinar valores iniciales según el modo
+                if emp_edit_row is not None:
+                    init_num_ctrl = _limpiar_texto(emp_edit_row.get("Numero_Control_Personal", "")).zfill(5)
+                    init_nombre   = _limpiar_texto(emp_edit_row.get("Nombre_Empleado_Robotica", ""))
+                    init_puesto   = _limpiar_texto(emp_edit_row.get("Puesto", ""))
+                    init_ingreso_raw = _limpiar_texto(emp_edit_row.get("Fecha_de_Ingreso", ""))
+                    init_curp     = _limpiar_texto(emp_edit_row.get("CURP", ""))
+                    init_rfc      = _limpiar_texto(emp_edit_row.get("RFC", ""))
+                    init_nss      = _limpiar_texto(emp_edit_row.get("NSS", ""))
+                    init_sangre   = _limpiar_texto(emp_edit_row.get("Tipo_Sangre", "")) or "N/D"
+                    init_tel      = _limpiar_texto(emp_edit_row.get("Telefono:", ""))
+                    init_padecim  = _limpiar_texto(emp_edit_row.get("Padecimientos:", "")) or "NINGUNO"
+                    init_alergias = _limpiar_texto(emp_edit_row.get("Alergias:", "")) or "NINGUNA"
+                else:
+                    # Sugerir siguiente número de control disponible
+                    nums_existentes = []
+                    for val in df_personal_acc.get("Numero_Control_Personal", []):
+                        v_str = str(val).strip()
+                        if v_str.isdigit():
+                            nums_existentes.append(int(v_str))
+                    prox_num = max(nums_existentes) + 1 if nums_existentes else 1
+                    init_num_ctrl = f"{prox_num:05d}"
+                    init_nombre   = ""
+                    init_puesto   = ""
+                    init_ingreso_raw = ""
+                    init_curp     = ""
+                    init_rfc      = ""
+                    init_nss      = ""
+                    init_sangre   = "N/D"
+                    init_tel      = ""
+                    init_padecim  = "NINGUNO"
+                    init_alergias = "NINGUNA"
+
+                # Parsear fecha de ingreso
+                try:
+                    if init_ingreso_raw and len(init_ingreso_raw) >= 10:
+                        if "/" in init_ingreso_raw[:10]:
+                            parts = init_ingreso_raw[:10].split("/")
+                            init_ingreso_date = datetime(int(parts[2]), int(parts[1]), int(parts[0])).date()
+                        elif "-" in init_ingreso_raw[:10]:
+                            parts = init_ingreso_raw[:10].split("-")
+                            init_ingreso_date = datetime(int(parts[0]), int(parts[1]), int(parts[2])).date()
+                        else:
+                            init_ingreso_date = datetime.today().date()
+                    else:
+                        init_ingreso_date = datetime.today().date()
+                except Exception:
+                    init_ingreso_date = datetime.today().date()
+
+                # Lista de puestos disponibles
+                puestos_existentes = []
+                if not df_puestos_acc.empty:
+                    puestos_existentes = sorted(list(set([_limpiar_texto(x) for x in df_puestos_acc.iloc[:, 0].tolist() if _limpiar_texto(x)])))
+                for p_extra in df_personal_acc.get("Puesto", []):
+                    p_limp = _limpiar_texto(p_extra)
+                    if p_limp and p_limp not in puestos_existentes:
+                        puestos_existentes.append(p_limp)
+                puestos_existentes = sorted(puestos_existentes)
+
+                st.write("---")
+                f_c1, f_c2, f_c3 = st.columns([1.8, 1.8, 1.4])
+
+                with f_c1:
+                    st.markdown("##### 📌 Datos Laborales")
+                    form_num_ctrl = st.text_input(
+                        "Número de Control / Nómina *",
+                        value=init_num_ctrl,
+                        key="form_emp_num_ctrl",
+                        help="Código único identificador del empleado (ej. 00007)"
+                    ).strip()
+
+                    form_nombre = st.text_input(
+                        "Nombre Completo del Trabajador *",
+                        value=init_nombre,
+                        key="form_emp_nombre"
+                    ).strip()
+
+                    puesto_idx = 0
+                    lista_puestos_ui = ["— Selecciona Puesto —"] + puestos_existentes + ["[➕ Escribir Nuevo Puesto...]"]
+                    if init_puesto in lista_puestos_ui:
+                        puesto_idx = lista_puestos_ui.index(init_puesto)
+
+                    sel_puesto_ui = st.selectbox(
+                        "Puesto en Planta:",
+                        lista_puestos_ui,
+                        index=puesto_idx,
+                        key="form_emp_puesto_sel"
+                    )
+                    if sel_puesto_ui == "[➕ Escribir Nuevo Puesto...]":
+                        form_puesto = st.text_input("Escribe el nombre del nuevo puesto:", key="form_emp_puesto_nuevo").strip()
+                    elif sel_puesto_ui == "— Selecciona Puesto —":
+                        form_puesto = ""
+                    else:
+                        form_puesto = sel_puesto_ui
+
+                    form_fecha_ingreso = st.date_input(
+                        "Fecha de Ingreso a la Empresa:",
+                        value=init_ingreso_date,
+                        key="form_emp_fecha_ingreso"
+                    )
+
+                with f_c2:
+                    st.markdown("##### 🩺 Identificación y Datos Médicos")
+                    form_curp = st.text_input("CURP:", value=init_curp, key="form_emp_curp").strip().upper()
+                    form_rfc = st.text_input("RFC:", value=init_rfc, key="form_emp_rfc").strip().upper()
+                    form_nss = st.text_input("NSS (Número de Seguro Social):", value=init_nss, key="form_emp_nss").strip()
+
+                    sangre_opts = ["N/D", "O+", "O-", "A+", "A-", "B+", "B-", "AB+", "AB-"]
+                    sangre_idx = sangre_opts.index(init_sangre) if init_sangre in sangre_opts else 0
+                    form_sangre = st.selectbox("Tipo de Sangre:", sangre_opts, index=sangre_idx, key="form_emp_sangre")
+
+                    form_tel = st.text_input("Teléfono de Contacto:", value=init_tel, key="form_emp_tel").strip()
+                    form_padecim = st.text_input("Padecimientos / Condiciones Médicas:", value=init_padecim, key="form_emp_padecim").strip()
+                    form_alergias = st.text_input("Alergias Conocidas:", value=init_alergias, key="form_emp_alergias").strip()
+
+                with f_c3:
+                    st.markdown("##### 📸 Fotografía Oficial")
+                    foto_actual_path1 = os.path.join(ruta_carpeta, "fotos", f"foto_{form_num_ctrl}.jpg").replace("\\", "/")
+                    foto_actual_path2 = os.path.join(ruta_carpeta, "fotos", f"foto_{int(form_num_ctrl):05d}.jpg").replace("\\", "/") if form_num_ctrl.isdigit() else ""
+                    foto_existente = foto_actual_path1 if os.path.exists(foto_actual_path1) else (foto_actual_path2 if os.path.exists(foto_actual_path2) else None)
+
+                    if foto_existente:
+                        st.image(foto_existente, caption=f"Foto Actual ({form_num_ctrl})", use_container_width=True)
+
+                    up_nueva_foto = st.file_uploader(
+                        "Cargar / Reemplazar Foto (JPG/PNG):",
+                        type=["jpg", "jpeg", "png"],
+                        key=f"up_foto_{form_num_ctrl}"
+                    )
+                    if up_nueva_foto:
+                        st.image(up_nueva_foto, caption="Vista Previa de Foto", use_container_width=True)
+
+                st.write("")
+                btn_save_col1, btn_save_col2 = st.columns([1.5, 3])
+                with btn_save_col1:
+                    btn_guardar_personal = st.button(
+                        "💾 Guardar Información del Trabajador",
+                        type="primary",
+                        use_container_width=True,
+                        key="btn_guardar_personal_action"
+                    )
+
+                if btn_guardar_personal:
+                    if not form_num_ctrl:
+                        st.error("⚠️ El Número de Control es obligatorio.")
+                    elif not form_nombre:
+                        st.error("⚠️ El Nombre del Trabajador es obligatorio.")
+                    else:
+                        num_ctrl_fmt = form_num_ctrl.zfill(5)
+                        fecha_ingreso_str = form_fecha_ingreso.strftime("%d/%m/%Y 12:00:00 a. m.")
+
+                        # Guardar fotografía si se subió
+                        if up_nueva_foto is not None:
+                            os.makedirs(os.path.join(ruta_carpeta, "fotos"), exist_ok=True)
+                            dest_f1 = os.path.join(ruta_carpeta, "fotos", f"foto_{num_ctrl_fmt}.jpg").replace("\\", "/")
+                            with open(dest_f1, "wb") as f_out:
+                                f_out.write(up_nueva_foto.getbuffer())
+                            if form_num_ctrl.isdigit():
+                                dest_f2 = os.path.join(ruta_carpeta, "fotos", f"foto_{int(form_num_ctrl):05d}.jpg").replace("\\", "/")
+                                with open(dest_f2, "wb") as f_out:
+                                    f_out.write(up_nueva_foto.getbuffer())
+
+                        # Guardar puesto nuevo en catálogo si aplica
+                        if form_puesto and form_puesto not in puestos_existentes:
+                            df_puestos_new = pd.concat([
+                                df_puestos_acc,
+                                pd.DataFrame([{"Disiplinas_y_Puestos": form_puesto}])
+                            ], ignore_index=True)
+                            guardar_tabla_access("PUESTOS", df_puestos_new)
+
+                        # Actualizar o insertar en PERSONAL
+                        df_personal_work = df_personal_acc.copy()
+                        row_dict = {
+                            "Numero_Control_Personal": num_ctrl_fmt,
+                            "Nombre_Empleado_Robotica": form_nombre,
+                            "Puesto": form_puesto,
+                            "Fecha_de_Ingreso": fecha_ingreso_str,
+                            "CURP": form_curp,
+                            "CURP_ARCHIVO": "",
+                            "RFC": form_rfc,
+                            "NSS": form_nss,
+                            "Curriculum": "",
+                            "Fotografia": "System.Byte[]",
+                            "Descripción_de_Puesto": "",
+                            "Tipo_Sangre": form_sangre,
+                            "Padecimientos:": form_padecim,
+                            "Alergias:": form_alergias,
+                            "Telefono:": form_tel
+                        }
+
+                        mask_match = df_personal_work["Numero_Control_Personal"].astype(str).str.strip().str.zfill(5) == num_ctrl_fmt
+                        if mask_match.any():
+                            idx_match = df_personal_work[mask_match].index[0]
+                            for k, v in row_dict.items():
+                                df_personal_work.at[idx_match, k] = v
+                            accion_msg = "actualizado"
+                        else:
+                            df_personal_work = pd.concat([df_personal_work, pd.DataFrame([row_dict])], ignore_index=True)
+                            accion_msg = "registrado"
+
+                        guardar_tabla_access("PERSONAL", df_personal_work)
+                        st.success(f"✅ Colaborador **{form_nombre}** ({num_ctrl_fmt}) ha sido {accion_msg} exitosamente.")
+                        time.sleep(1)
+                        st.rerun()
+
+            # ─────────────────────────────────────────────
+            # SUB-TAB 3: ASIGNACIÓN Y REGISTRO DE CURSOS & DC-3
+            # ─────────────────────────────────────────────
+            with sub_alta_cursos:
+                st.markdown("""
+                <div style="background: linear-gradient(90deg, #111111 0%, #2b2b2b 100%);
+                            border-left: 5px solid #EC2024; border-radius: 8px; padding: 14px 20px; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: white; font-family: 'Montserrat', sans-serif;">🎓 Asignación y Registro de Cursos & DC-3</h3>
+                    <p style="margin: 4px 0 0 0; color: #d2d3d5; font-size: 13px;">Registra capacitaciones, certificaciones oficiales y constancias DC-3 al expediente de cada trabajador.</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                c_asig1, c_asig2 = st.columns([2, 1])
+                with c_asig1:
+                    sel_emp_para_curso = st.selectbox(
+                        "Selecciona el Colaborador a capacitar *:",
+                        opciones,
+                        key="sel_emp_para_curso"
+                    )
+
+                if sel_emp_para_curso:
+                    idx_emp_c = opciones.index(sel_emp_para_curso)
+                    fila_emp_c = df_personal_acc.iloc[idx_emp_c]
+                    num_ctrl_c = _limpiar_texto(fila_emp_c.get("Numero_Control_Personal", "")).zfill(5)
+                    nom_emp_c  = _limpiar_texto(fila_emp_c.get("Nombre_Empleado_Robotica", ""))
+                    puesto_emp_c = _limpiar_texto(fila_emp_c.get("Puesto", ""))
+
+                    cursos_actuales_emp = obtener_cursos_empleado(df_cursos_acc, num_ctrl_c, nom_emp_c)
+                    with c_asig2:
+                        st.markdown(
+                            f'<div style="background:#f8f9fa; border:1px solid #ddd; border-left:4px solid #EC2024; border-radius:6px; padding:8px 12px; margin-top:12px;">'
+                            f'<div style="font-size:12px; font-weight:bold; color:#111;">Puesto: {puesto_emp_c if puesto_emp_c else "Sin Asignar"}</div>'
+                            f'<div style="font-size:12px; color:#555;">Capacitaciones en Expediente: <b>{len(cursos_actuales_emp)}</b></div>'
+                            f'</div>',
+                            unsafe_allow_html=True
+                        )
+
+                    st.write("---")
+                    st.markdown("#### 📝 Datos de la Nueva Capacitación")
+
+                    cat_cursos_existentes = []
+                    if not df_cursos_cat.empty:
+                        cat_cursos_existentes = [_limpiar_texto(x) for x in df_cursos_cat.iloc[:, 0].tolist() if _limpiar_texto(x)]
+                    for c_hist in df_cursos_acc.get("Nombre_del_Curso", []):
+                        ch_limp = _limpiar_texto(c_hist)
+                        if ch_limp and ch_limp not in cat_cursos_existentes:
+                            cat_cursos_existentes.append(ch_limp)
+                    cat_cursos_existentes = sorted(list(set(cat_cursos_existentes)))
+
+                    cc_col1, cc_col2 = st.columns(2)
+
+                    with cc_col1:
+                        lista_cursos_ui = ["— Selecciona Curso del Catálogo —"] + cat_cursos_existentes + ["[➕ Registrar Nuevo Curso...]"]
+                        sel_curso_ui = st.selectbox("Nombre del Curso / Capacitación *:", lista_cursos_ui, key="sel_curso_nombre_ui")
+
+                        if sel_curso_ui == "[➕ Registrar Nuevo Curso...]":
+                            nombre_curso_nuevo = st.text_input("Escribe el nombre del nuevo curso:", key="txt_nuevo_curso_nombre").strip()
+                        elif sel_curso_ui == "— Selecciona Curso del Catálogo —":
+                            nombre_curso_nuevo = ""
+                        else:
+                            nombre_curso_nuevo = sel_curso_ui
+
+                        c_horas = st.number_input("Horas de Capacitación Invertidas *:", min_value=1, max_value=500, value=16, step=1, key="num_horas_curso")
+                        c_fecha_inicio = st.date_input("Fecha de Inicio del Curso:", value=datetime.today().date(), key="fec_ini_curso")
+                        c_fecha_cierre = st.date_input("Fecha de Término / Cierre:", value=datetime.today().date(), key="fec_fin_curso")
+                        c_imparte = st.text_input("Instructor o Institución que Imparte:", placeholder="ej. FESTO, STPS, CANACINTRA, Capacitación Interna Sigrama", key="txt_quien_imparte").strip()
+
+                    with cc_col2:
+                        c_dc3_val = st.selectbox("¿Acreditado con Constancia de Competencias Laborales DC-3?", ["SÍ", "NO"], index=0, key="sel_tiene_dc3")
+                        c_certif = st.checkbox("Certificación Oficial del Curso", value=False, key="chk_certif")
+                        c_val_curr = st.checkbox("Cuenta con Valor Curricular", value=True, key="chk_val_curr")
+                        c_donde = st.text_input("Sede / Modalidad donde se cursó:", placeholder="ej. Planta Metales Sigrama, Gomez Palacio, En Línea", key="txt_donde_curso").strip()
+                        c_competencias = st.text_area("Competencias Adquiridas:", placeholder="ej. Operación segura de equipos, prevención de riesgos...", key="txt_competencias").strip()
+
+                    st.markdown("##### 📎 Comprobante / Constancia / Diploma")
+                    up_doc_nuevo = st.file_uploader(
+                        "Subir archivo del comprobante o constancia DC-3 (PDF, JPG, PNG):",
+                        type=["pdf", "jpg", "jpeg", "png"],
+                        key=f"up_doc_curso_{num_ctrl_c}"
+                    )
+
+                    btn_guardar_curso = st.button("💾 Guardar Curso en el Expediente", type="primary", key="btn_save_curso_action")
+
+                    if btn_guardar_curso:
+                        if not nombre_curso_nuevo:
+                            st.error("⚠️ Debes indicar o seleccionar el Nombre del Curso.")
+                        else:
+                            dir_docs = os.path.join(ruta_carpeta, "documentos_cursos").replace("\\", "/")
+                            os.makedirs(dir_docs, exist_ok=True)
+                            archivo_guardado_nombre = ""
+                            if up_doc_nuevo is not None:
+                                archivo_guardado_nombre = up_doc_nuevo.name
+                                dest_doc = os.path.join(dir_docs, archivo_guardado_nombre).replace("\\", "/")
+                                with open(dest_doc, "wb") as f_out:
+                                    f_out.write(up_doc_nuevo.getbuffer())
+
+                            # Si fue un curso nuevo, agregarlo al catálogo
+                            if sel_curso_ui == "[➕ Registrar Nuevo Curso...]" and nombre_curso_nuevo:
+                                if not df_cursos_cat.empty:
+                                    col_cat_name = df_cursos_cat.columns[0]
+                                    if nombre_curso_nuevo not in df_cursos_cat[col_cat_name].tolist():
+                                        df_cat_new = pd.concat([df_cursos_cat, pd.DataFrame([{col_cat_name: nombre_curso_nuevo}])], ignore_index=True)
+                                        guardar_tabla_access("Cusos_Disponibles", df_cat_new)
+                                else:
+                                    df_cat_new = pd.DataFrame([{"Nombre_de_Cursos": nombre_curso_nuevo}])
+                                    guardar_tabla_access("Cusos_Disponibles", df_cat_new)
+
+                            # Agregar a CURSOS
+                            nueva_fila_c = {
+                                "Empleado": num_ctrl_c,
+                                "Nombre_del_Curso": nombre_curso_nuevo,
+                                "Horas_Invertidas": str(int(c_horas)),
+                                "Reconocimiento": archivo_guardado_nombre,
+                                "Fecha_del_curso": c_fecha_inicio.strftime("%d/%m/%Y 12:00:00 a. m."),
+                                "Cierre_del_Curso": c_fecha_cierre.strftime("%d/%m/%Y 12:00:00 a. m."),
+                                "DCIII": "True" if c_dc3_val == "SÍ" else "False",
+                                "Cerificion_del_curso": str(c_certif),
+                                "Valor_Curricular": str(c_val_curr),
+                                "Donde_curso": c_donde,
+                                "Quien_imparte": c_imparte,
+                                "Competencias_adquiridas": c_competencias
+                            }
+
+                            df_cursos_work = pd.concat([df_cursos_acc, pd.DataFrame([nueva_fila_c])], ignore_index=True)
+                            guardar_tabla_access("CURSOS", df_cursos_work)
+                            st.success(f"✅ Curso **{nombre_curso_nuevo}** agregado exitosamente al expediente de **{nom_emp_c}**.")
+                            time.sleep(1)
+                            st.rerun()
+
+                    # Mostrar cursos que ya tiene asignados este colaborador
+                    st.write("---")
+                    st.markdown(f"#### 📋 Capacitaciones Registradas para **{nom_emp_c}** ({len(cursos_actuales_emp)})")
+                    if cursos_actuales_emp.empty:
+                        st.info("Este colaborador no tiene cursos registrados todavía.")
+                    else:
+                        st.dataframe(
+                            cursos_actuales_emp[[
+                                "Nombre_del_Curso", "Horas_Invertidas", "Fecha_del_curso",
+                                "DCIII", "Quien_imparte", "Reconocimiento"
+                            ]].rename(columns={
+                                "Nombre_del_Curso": "Curso",
+                                "Horas_Invertidas": "Horas",
+                                "Fecha_del_curso": "Fecha",
+                                "DCIII": "DC-3",
+                                "Quien_imparte": "Imparte",
+                                "Reconocimiento": "Archivo Comprobante"
+                            }),
+                            use_container_width=True,
+                            hide_index=True
+                        )
+
+            # ─────────────────────────────────────────────
+            # SUB-TAB 4: HISTORIAL DE CAPACITACIÓN
             # ─────────────────────────────────────────────
             with sub_cursos:
                 st.subheader("📚 Historial Completo de Capacitación")
