@@ -2414,6 +2414,16 @@ with tab_expedientes:
             ids_emp     = df_personal_acc.get("Numero_Control_Personal", pd.Series(dtype=str)).tolist()
             opciones    = [f"{str(nid).zfill(5)} — {nom.strip()}" for nid, nom in zip(ids_emp, nombres_emp)]
 
+            # Catálogo unificado de cursos disponibles
+            cat_cursos_existentes = []
+            if not df_cursos_cat.empty:
+                cat_cursos_existentes = [_limpiar_texto(x) for x in df_cursos_cat.iloc[:, 0].tolist() if _limpiar_texto(x)]
+            for c_hist in df_cursos_acc.get("Nombre_del_Curso", []):
+                ch_limp = _limpiar_texto(c_hist)
+                if ch_limp and ch_limp not in cat_cursos_existentes:
+                    cat_cursos_existentes.append(ch_limp)
+            cat_cursos_existentes = sorted(list(set(cat_cursos_existentes)))
+
             # ====== SUB-PESTAÑAS ======
             sub_ficha, sub_alta_personal, sub_alta_cursos, sub_cursos, sub_dashboard, sub_catalogos = st.tabs([
                 "👤 Ficha del Colaborador",
@@ -2539,7 +2549,91 @@ with tab_expedientes:
                         )
 
                     st.write("---")
-                    st.subheader("📚 Historial de Cursos y Capacitaciones del Colaborador")
+                    
+                    # Encabezado y botón para registrar curso directamente
+                    col_h_c1, col_h_c2 = st.columns([2.5, 1.5])
+                    with col_h_c1:
+                        st.subheader("📚 Historial de Cursos y Capacitaciones")
+                    with col_h_c2:
+                        st.markdown("<div style='text-align:right; padding-top:6px; color:#666; font-size:12px;'>Expediente Digital Sigrama</div>", unsafe_allow_html=True)
+
+                    with st.expander(f"➕ Registrar Nueva Capacitación para {nombre_disp}", expanded=False):
+                        st.markdown(f"**Asignar curso o constancia DC-3 a:** `{num_ctrl} — {nombre_disp}`")
+                        qc_c1, qc_c2 = st.columns(2)
+                        with qc_c1:
+                            q_lista_cursos = ["— Selecciona Curso del Catálogo —"] + cat_cursos_existentes + ["[➕ Registrar Nuevo Curso...]"]
+                            q_sel_curso = st.selectbox("Nombre del Curso / Capacitación *:", q_lista_cursos, key=f"q_sel_cur_{num_ctrl}")
+                            if q_sel_curso == "[➕ Registrar Nuevo Curso...]":
+                                q_nombre_curso = st.text_input("Escribe el nombre del nuevo curso:", key=f"q_txt_cur_{num_ctrl}").strip()
+                            elif q_sel_curso == "— Selecciona Curso del Catálogo —":
+                                q_nombre_curso = ""
+                            else:
+                                q_nombre_curso = q_sel_curso
+
+                            q_horas = st.number_input("Horas de Capacitación Invertidas *:", min_value=1, max_value=500, value=16, step=1, key=f"q_hrs_{num_ctrl}")
+                            q_f_ini = st.date_input("Fecha de Inicio:", value=datetime.today().date(), key=f"q_fini_{num_ctrl}")
+                            q_f_fin = st.date_input("Fecha de Término / Cierre:", value=datetime.today().date(), key=f"q_ffin_{num_ctrl}")
+                            q_imparte = st.text_input("Instructor o Institución:", placeholder="ej. FESTO, STPS, Capacitación Interna Sigrama", key=f"q_imp_{num_ctrl}").strip()
+
+                        with qc_c2:
+                            q_dc3 = st.selectbox("¿Acreditado con Constancia DC-3?", ["SÍ", "NO"], index=0, key=f"q_dc3_{num_ctrl}")
+                            q_cert = st.checkbox("Certificación Oficial del Curso", value=False, key=f"q_cert_{num_ctrl}")
+                            q_curr = st.checkbox("Cuenta con Valor Curricular", value=True, key=f"q_curr_{num_ctrl}")
+                            q_donde = st.text_input("Sede / Modalidad:", placeholder="ej. Planta Metales Sigrama, Gomez Palacio", key=f"q_donde_{num_ctrl}").strip()
+                            q_comp = st.text_area("Competencias Adquiridas:", placeholder="ej. Operación segura de equipos...", key=f"q_comp_{num_ctrl}").strip()
+
+                        st.markdown("##### 📎 Comprobante / Constancia / Diploma")
+                        q_up_doc = st.file_uploader(
+                            "Subir archivo del comprobante (PDF, JPG, PNG):",
+                            type=["pdf", "jpg", "jpeg", "png"],
+                            key=f"q_up_doc_{num_ctrl}"
+                        )
+
+                        q_btn_guardar = st.button("💾 Guardar Curso en el Expediente", type="primary", key=f"q_btn_save_{num_ctrl}")
+
+                        if q_btn_guardar:
+                            if not q_nombre_curso:
+                                st.error("⚠️ Debes indicar o seleccionar el Nombre del Curso.")
+                            else:
+                                dir_docs = os.path.join(ruta_carpeta, "documentos_cursos").replace("\\", "/")
+                                os.makedirs(dir_docs, exist_ok=True)
+                                q_archivo_nombre = ""
+                                if q_up_doc is not None:
+                                    q_archivo_nombre = q_up_doc.name
+                                    q_dest = os.path.join(dir_docs, q_archivo_nombre).replace("\\", "/")
+                                    with open(q_dest, "wb") as f_out:
+                                        f_out.write(q_up_doc.getbuffer())
+
+                                if q_sel_curso == "[➕ Registrar Nuevo Curso...]" and q_nombre_curso:
+                                    if not df_cursos_cat.empty:
+                                        col_cat_name = df_cursos_cat.columns[0]
+                                        if q_nombre_curso not in df_cursos_cat[col_cat_name].tolist():
+                                            df_cat_new = pd.concat([df_cursos_cat, pd.DataFrame([{col_cat_name: q_nombre_curso}])], ignore_index=True)
+                                            guardar_tabla_access("Cusos_Disponibles", df_cat_new)
+                                    else:
+                                        df_cat_new = pd.DataFrame([{"Nombre_de_Cursos": q_nombre_curso}])
+                                        guardar_tabla_access("Cusos_Disponibles", df_cat_new)
+
+                                q_nueva_fila = {
+                                    "Empleado": num_ctrl,
+                                    "Nombre_del_Curso": q_nombre_curso,
+                                    "Horas_Invertidas": str(int(q_horas)),
+                                    "Reconocimiento": q_archivo_nombre,
+                                    "Fecha_del_curso": q_f_ini.strftime("%d/%m/%Y 12:00:00 a. m."),
+                                    "Cierre_del_Curso": q_f_fin.strftime("%d/%m/%Y 12:00:00 a. m."),
+                                    "DCIII": "True" if q_dc3 == "SÍ" else "False",
+                                    "Cerificion_del_curso": str(q_cert),
+                                    "Valor_Curricular": str(q_curr),
+                                    "Donde_curso": q_donde,
+                                    "Quien_imparte": q_imparte,
+                                    "Competencias_adquiridas": q_comp
+                                }
+
+                                df_cursos_work = pd.concat([df_cursos_acc, pd.DataFrame([q_nueva_fila])], ignore_index=True)
+                                guardar_tabla_access("CURSOS", df_cursos_work)
+                                st.success(f"✅ Curso **{q_nombre_curso}** agregado exitosamente al expediente de **{nombre_disp}**.")
+                                time.sleep(1)
+                                st.rerun()
 
                     # Filtrar cursos por Empleado usando función robusta con soporte para números legacy
                     df_emp_cursos = obtener_cursos_empleado(df_cursos_acc, num_ctrl, nombre_disp)
