@@ -19,7 +19,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 import textwrap
 import time
-
+import expedientes_manager as em
 
 
 # Configuración estética de la interfaz del navegador
@@ -977,6 +977,12 @@ with tab_areas:
         
         if cambio_detectado:
             df_db.to_excel(ARCHIVO_PERSONAL, index=False)
+            guardar_archivo_sync(ARCHIVO_PERSONAL)
+
+        # Sincronización y auto-generación de Expedientes Digitales de Personal
+        nuevos_exp = em.asegurar_expedientes_personal(df_db, df_asistencias_raw, ruta_carpeta, guardar_sync_fn=guardar_archivo_sync)
+        if nuevos_exp:
+            st.success(f"🎉 Se detectaron **{len(nuevos_exp)} nuevo(s) colaborador(es)** en la asistencia de nómina. ¡Se generó automáticamente su Expediente Digital en 'Expedientes & Capacitaciones' con su fecha de primer ingreso detectada!")
 
 
 
@@ -1508,7 +1514,8 @@ with tab_reportes:
                     label="📄 Descargar Reporte Dividido por Áreas (.xlsx)", 
                     data=buffer_excel.getvalue(), 
                     file_name=f"PRENOMINA_POR_AREAS_{fecha_fin.strftime('%Y%m%d')}.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    on_click="ignore"
                 )
                 # Generar el archivo PDF en memoria
 
@@ -1530,7 +1537,8 @@ with tab_reportes:
                     label="📄 Descargar Reporte de Pre-Nómina en PDF",
                     data=pdf_data,
                     file_name=f"PRENOMINA_{fecha_fin.strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf"
+                    mime="application/pdf",
+                    on_click="ignore"
                 )
 
 
@@ -1709,7 +1717,8 @@ with tab_historico:
             label="📄 Descargar Reporte Premium Planta Metales en PDF",
             data=pdf_data,
             file_name="Reporte_Historico_Metales_Sigrama.pdf",
-            mime="application/pdf"
+            mime="application/pdf",
+            on_click="ignore"
         )
         
         # --- SEGUNDO NIVEL: DETALLE DIARIO DESPLEGABLE POR SEMANA ---
@@ -2017,21 +2026,11 @@ def _limpiar_texto(val) -> str:
 def obtener_cursos_empleado(df_cursos: pd.DataFrame, num_ctrl: str, nombre_empleado: str = "") -> pd.DataFrame:
     """
     Enlaza de forma robusta los cursos de un colaborador considerando número de control (zfill(5)),
-    números enteros y alias de migraciones anteriores (ej. 09517 -> 00001).
+    números enteros y alias de migraciones anteriores (ej. 09517 -> 00001 / 01247).
     """
     if df_cursos.empty or "Empleado" not in df_cursos.columns:
         return pd.DataFrame()
-    num_clean = str(num_ctrl).strip().zfill(5)
-    num_int   = str(int(num_clean)) if num_clean.isdigit() else num_clean
-    alias_map = {
-        '00001': ['00001', '09517', '9517', '1'],
-        '00002': ['00002', '2'],
-        '00003': ['00003', '3'],
-        '00004': ['00004', '4'],
-        '00005': ['00005', '5'],
-        '00006': ['00006', '6']
-    }
-    match_ids = alias_map.get(num_clean, [num_clean, num_int])
+    match_ids = em.calcular_aliases_empleado(num_ctrl)
     mask_emp  = df_cursos['Empleado'].astype(str).str.strip().apply(lambda v: v.zfill(5) in match_ids or v in match_ids)
     return df_cursos[mask_emp].copy()
 
@@ -2121,7 +2120,8 @@ def visualizar_documento_curso(nombre_archivo: str, key_prefix: str = ""):
                     data=pdf_bytes,
                     file_name=nombre_limpio,
                     mime="application/pdf",
-                    key=f"dl_pdf_{key_prefix}_{abs(hash(nombre_limpio))}"
+                    key=f"dl_pdf_{key_prefix}_{abs(hash(nombre_limpio))}",
+                    on_click="ignore"
                 )
             except Exception as e:
                 st.error(f"Error procesando PDF: {e}")
@@ -2134,7 +2134,8 @@ def visualizar_documento_curso(nombre_archivo: str, key_prefix: str = ""):
                         data=f_img.read(),
                         file_name=nombre_limpio,
                         mime=f"image/{ext[1:]}",
-                        key=f"dl_img_{key_prefix}_{abs(hash(nombre_limpio))}"
+                        key=f"dl_img_{key_prefix}_{abs(hash(nombre_limpio))}",
+                        on_click="ignore"
                     )
             except Exception as e:
                 st.error(f"Error cargando imagen: {e}")
@@ -2144,7 +2145,8 @@ def visualizar_documento_curso(nombre_archivo: str, key_prefix: str = ""):
                     label=f"📥 Descargar Documento ({nombre_limpio})",
                     data=f_gen.read(),
                     file_name=nombre_limpio,
-                    key=f"dl_gen_{key_prefix}_{abs(hash(nombre_limpio))}"
+                    key=f"dl_gen_{key_prefix}_{abs(hash(nombre_limpio))}",
+                    on_click="ignore"
                 )
     else:
         st.warning(f"⚠️ Archivo no encontrado en el sistema: **{nombre_limpio}**. Puedes cargarlo a continuación:")
@@ -2266,6 +2268,51 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
     ]))
     elements.append(tbl_med)
     elements.append(Spacer(1, 8))
+
+    # 3. Checklist Documental del Expediente Digital (Capital Humano)
+    elements.append(Paragraph('📁 ESTATUS DEL EXPEDIENTE DIGITAL Y DOCUMENTACIÓN DE INGRESO', sec_title))
+    elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#111111'), spaceBefore=1, spaceAfter=4))
+    
+    docs_checklist_data = [
+        [Paragraph('DOCUMENTO', tbl_hdr), Paragraph('ESTADO', tbl_hdr), Paragraph('DOCUMENTO', tbl_hdr), Paragraph('ESTADO', tbl_hdr)]
+    ]
+    doc_items = [
+        ("Identificación Oficial (INE)", row_personal.get("Doc_INE", "")),
+        ("Constancia de CURP", row_personal.get("Doc_CURP", "")),
+        ("Constancia RFC / SAT", row_personal.get("Doc_RFC", "")),
+        ("Número Seg. Social (NSS)", row_personal.get("Doc_NSS", "")),
+        ("Comprobante de Domicilio", row_personal.get("Doc_Domicilio", "")),
+        ("Contrato de Trabajo Firmado", row_personal.get("Doc_Contrato", "")),
+        ("Aviso Alta Patronal IMSS", row_personal.get("Doc_Alta_IMSS", "")),
+        ("Solicitud de Empleo / CV", row_personal.get("Doc_CV", ""))
+    ]
+    for i in range(0, len(doc_items), 2):
+        d1_nom, d1_val = doc_items[i]
+        d2_nom, d2_val = doc_items[i+1]
+        
+        ok1 = str(d1_val).strip().lower() in ("true", "1", "si", "sí", "entregado", "completo")
+        ok2 = str(d2_val).strip().lower() in ("true", "1", "si", "sí", "entregado", "completo")
+        
+        st1_txt = '<font color="#1b5e20"><b>ENTREGADO</b></font>' if ok1 else '<font color="#c62828"><b>PENDIENTE</b></font>'
+        st2_txt = '<font color="#1b5e20"><b>ENTREGADO</b></font>' if ok2 else '<font color="#c62828"><b>PENDIENTE</b></font>'
+        
+        docs_checklist_data.append([
+            Paragraph(d1_nom, tbl_cell), Paragraph(st1_txt, tbl_cell),
+            Paragraph(d2_nom, tbl_cell), Paragraph(st2_txt, tbl_cell)
+        ])
+        
+    tbl_docs_pdf = Table(docs_checklist_data, colWidths=[185, 93, 185, 93])
+    tbl_docs_pdf.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#111111')),
+        ('ALIGN', (1,0), (1,-1), 'CENTER'),
+        ('ALIGN', (3,0), (3,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#DDDDDD')),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.HexColor('#FFFFFF'), colors.HexColor('#F9F9F9')]),
+        ('PADDING', (0,0), (-1,-1), 3)
+    ]))
+    elements.append(tbl_docs_pdf)
+    elements.append(Spacer(1, 8))
     
     # Helper para miniaturas de constancias
     dir_docs = os.path.join(ruta_carpeta, "documentos_cursos").replace("\\", "/")
@@ -2367,18 +2414,24 @@ with tab_expedientes:
     </div>
     """, unsafe_allow_html=True)
 
-    # Verificar si la DB local o su respaldo existe
+    # Verificar si la base de datos de personal o su respaldo CSV existe
     db_disponible = os.path.exists(RUTA_ACCESS_DB) or os.path.exists(os.path.join(ruta_carpeta, "access_PERSONAL.csv"))
 
     if not db_disponible:
         st.warning(
-            "⚠️ **Base de datos no encontrada:** `PERSONAL.accdb` no está en la carpeta del proyecto. "
-            "Por favor copia el archivo ahí para habilitar este módulo.",
+            "⚠️ **Base de datos no encontrada:** `access_PERSONAL.csv` no está en la carpeta de asistencias.",
             icon="⚠️"
         )
     else:
-        # Carga de tablas
-        with st.spinner("🔄 Cargando base de datos de Capital Humano..."):
+        # Sincronización automática de expedientes con el catálogo y las asistencias
+        df_cat_personal = cargar_catalogo_personal()
+        df_asist_exp = procesar_base_asistencias(ruta_carpeta)
+        nuevos_auto = em.asegurar_expedientes_personal(df_cat_personal, df_asist_exp, ruta_carpeta, guardar_sync_fn=guardar_archivo_sync)
+        if nuevos_auto:
+            st.toast(f"📁 Se generaron {len(nuevos_auto)} expediente(s) nuevo(s) automáticamente.", icon="🎉")
+
+        # Carga de tablas de Capital Humano
+        with st.spinner("🔄 Cargando expedientes y capacitaciones de Capital Humano..."):
             df_personal_acc = leer_tabla_access("PERSONAL")
             df_cursos_acc   = leer_tabla_access("CURSOS")
             df_puestos_acc  = leer_tabla_access("PUESTOS")
@@ -2391,7 +2444,16 @@ with tab_expedientes:
             df_personal_acc = df_personal_acc.fillna("").astype(str).map(str.strip)
             df_cursos_acc   = df_cursos_acc.fillna("").astype(str).map(str.strip)
 
-            # ---- KPI banner superior ----
+            # ---- Contabilizar estatus de expedientes ----
+            exp_completos = 0
+            exp_incompletos = 0
+            for _, r_exp in df_personal_acc.iterrows():
+                c_ok, t_tot, _, _, _ = em.evaluar_estatus_expediente(r_exp, ruta_carpeta)
+                if c_ok == t_tot and t_tot > 0:
+                    exp_completos += 1
+                else:
+                    exp_incompletos += 1
+
             total_emp  = len(df_personal_acc)
             total_cur  = len(df_cursos_acc)
             dc3_count  = len(df_cursos_acc[df_cursos_acc.get("DCIII", pd.Series(dtype=str)).apply(
@@ -2401,11 +2463,12 @@ with tab_expedientes:
             if horas_col in df_cursos_acc.columns:
                 total_hrs = pd.to_numeric(df_cursos_acc[horas_col], errors="coerce").fillna(0).sum()
 
-            k1, k2, k3, k4 = st.columns(4)
-            k1.metric("👤 Colaboradores en BD", total_emp)
-            k2.metric("📚 Registros de Capacitación", total_cur)
-            k3.metric("📜 Constancias DC-3", dc3_count)
-            k4.metric("⏱️ Horas Totales de Capacitación", f"{int(total_hrs):,} hrs")
+            k1, k2, k3, k4, k5 = st.columns(5)
+            k1.metric("👤 Plantilla Activa", total_emp)
+            k2.metric("🟢 Expedientes Completos", exp_completos)
+            k3.metric("🟡 Docs Pendientes", exp_incompletos)
+            k4.metric("📜 Constancias DC-3", dc3_count)
+            k5.metric("⏱️ Horas Capacitación", f"{int(total_hrs):,} hrs")
 
             st.markdown("---")
 
@@ -2453,15 +2516,24 @@ with tab_expedientes:
                 </div>
                 """, unsafe_allow_html=True)
 
+                opciones = []
+                for _, r_opt in df_personal_acc.iterrows():
+                    nid_opt = _limpiar_texto(r_opt.get("Numero_Control_Personal", "")).zfill(5)
+                    nom_opt = _limpiar_texto(r_opt.get("Nombre_Empleado_Robotica", ""))
+                    pst_opt = _limpiar_texto(r_opt.get("Puesto", ""))
+                    c_ok, t_tot, _, _, _ = em.evaluar_estatus_expediente(r_opt, ruta_carpeta)
+                    badge = "🟢" if c_ok == t_tot and t_tot > 0 else "🟡"
+                    opciones.append(f"{nid_opt} — {nom_opt} ({pst_opt or 'Sin Asignar'}) | {badge} {c_ok}/{t_tot} docs")
+
                 col_sel1, col_sel2 = st.columns([3, 1])
                 with col_sel1:
-                    sel = st.selectbox("🔍 Selecciona el Colaborador para consultar su Ficha Técnica:", opciones, key="ficha_sel_emp")
+                    sel = st.selectbox("🔍 Selecciona el Colaborador para consultar y gestionar su Expediente:", opciones, key="ficha_sel_emp")
 
                 if sel:
-                    idx_sel = opciones.index(sel)
-                    fila    = df_personal_acc.iloc[idx_sel]
+                    num_ctrl = sel.split(" — ")[0].strip().zfill(5)
+                    fila_match = df_personal_acc[df_personal_acc["Numero_Control_Personal"].astype(str).str.strip().str.zfill(5) == num_ctrl]
+                    fila = fila_match.iloc[0] if not fila_match.empty else df_personal_acc.iloc[0]
 
-                    num_ctrl    = _limpiar_texto(fila.get("Numero_Control_Personal", "")).zfill(5)
                     nombre_disp = _limpiar_texto(fila.get("Nombre_Empleado_Robotica", ""))
                     puesto_disp = _limpiar_texto(fila.get("Puesto", ""))
                     ingreso     = _limpiar_texto(fila.get("Fecha_de_Ingreso", ""))
@@ -2477,9 +2549,7 @@ with tab_expedientes:
                     df_emp_cursos = obtener_cursos_empleado(df_cursos_acc, num_ctrl, nombre_disp)
 
                     # Buscar foto oficial si existe
-                    foto_path1 = os.path.join(ruta_carpeta, "fotos", f"foto_{num_ctrl}.jpg").replace("\\", "/")
-                    foto_path2 = os.path.join(ruta_carpeta, "fotos", f"foto_{int(num_ctrl):05d}.jpg").replace("\\", "/")
-                    foto_final = foto_path1 if os.path.exists(foto_path1) else (foto_path2 if os.path.exists(foto_path2) else None)
+                    foto_final = em.buscar_foto_empleado(num_ctrl, ruta_carpeta)
 
                     with col_sel2:
                         st.write("") # Espaciador
@@ -2489,7 +2559,8 @@ with tab_expedientes:
                             data=pdf_ficha_bytes,
                             file_name=f"Ficha_Tecnica_{num_ctrl}_{nombre_disp.replace(' ', '_')}.pdf",
                             mime="application/pdf",
-                            key=f"btn_dl_ficha_pdf_{num_ctrl}"
+                            key=f"btn_dl_ficha_pdf_{num_ctrl}",
+                            on_click="ignore"
                         )
 
                     # Formato de 3 Columnas Fiel al Formulario de Access
@@ -2519,11 +2590,6 @@ with tab_expedientes:
                         )
 
                     with c_photo:
-                        # Buscar foto extraída foto_{num_ctrl}.jpg o foto_{int(num_ctrl)}.jpg
-                        foto_path1 = os.path.join(ruta_carpeta, "fotos", f"foto_{num_ctrl}.jpg").replace("\\", "/")
-                        foto_path2 = os.path.join(ruta_carpeta, "fotos", f"foto_{int(num_ctrl):05d}.jpg").replace("\\", "/")
-                        foto_final = foto_path1 if os.path.exists(foto_path1) else (foto_path2 if os.path.exists(foto_path2) else None)
-
                         st.markdown("<div style='text-align:center; padding: 4px; background:#ffffff; border:1px solid #e0e0e0; border-radius:8px;'>", unsafe_allow_html=True)
                         if foto_final and os.path.exists(foto_final):
                             st.image(foto_final, caption=f"Fotografía Oficial — {nombre_disp}", use_container_width=True)
@@ -2547,6 +2613,144 @@ with tab_expedientes:
                             f'</div>',
                             unsafe_allow_html=True
                         )
+
+                    # ─────────────────────────────────────────────
+                    # SECCIÓN DE EXPEDIENTE DIGITAL Y CHECKLIST DOCUMENTAL
+                    # ─────────────────────────────────────────────
+                    comp_docs, tot_docs, pct_docs, estatus_str, dict_docs = em.evaluar_estatus_expediente(fila, ruta_carpeta)
+
+                    st.markdown("---")
+                    st.markdown(f"### 📋 Expediente Digital: {estatus_str}")
+                    st.progress(pct_docs / 100.0, text=f"Avance Documental: {comp_docs} de {tot_docs} documentos registrados ({pct_docs}%)")
+
+                    # Tarjetas de documentos
+                    cols_d1, cols_d2 = st.columns(2)
+                    for i_doc, (k_col, etiqueta) in enumerate(em.LISTA_DOCS_EXPEDIENTE):
+                        col_dest = cols_d1 if i_doc % 2 == 0 else cols_d2
+                        doc_info = dict_docs[k_col]
+                        esta_entregado = doc_info["entregado"]
+                        archivo_adj = doc_info["archivo"]
+
+                        with col_dest:
+                            with st.container(border=True):
+                                c_lbl, c_stat = st.columns([3, 1])
+                                with c_lbl:
+                                    st.markdown(f"**{etiqueta}**")
+                                with c_stat:
+                                    if esta_entregado:
+                                        st.markdown('<span style="background:#e8f5e9; color:#2e7d32; font-weight:bold; padding:3px 8px; border-radius:4px; font-size:12px;">✅ ENTREGADO</span>', unsafe_allow_html=True)
+                                    else:
+                                        st.markdown('<span style="background:#ffebee; color:#c62828; font-weight:bold; padding:3px 8px; border-radius:4px; font-size:12px;">❌ PENDIENTE</span>', unsafe_allow_html=True)
+
+                                if archivo_adj:
+                                    ruta_arch = os.path.join(ruta_carpeta, "expedientes_digitales", num_ctrl, archivo_adj).replace("\\", "/")
+                                    if os.path.exists(ruta_arch):
+                                        with open(ruta_arch, "rb") as fa:
+                                            bytes_arch = fa.read()
+                                        mime_t = "application/pdf" if archivo_adj.lower().endswith(".pdf") else "image/jpeg"
+                                        st.download_button(
+                                            label=f"⬇️ Descargar: {archivo_adj[:22]}...",
+                                            data=bytes_arch,
+                                            file_name=archivo_adj,
+                                            mime=mime_t,
+                                            key=f"dl_doc_{num_ctrl}_{k_col}",
+                                            on_click="ignore"
+                                        )
+
+                                subir_doc = st.file_uploader(
+                                    f"Adjuntar archivo para {etiqueta}",
+                                    type=["pdf", "jpg", "jpeg", "png"],
+                                    key=f"up_{num_ctrl}_{k_col}",
+                                    label_visibility="collapsed"
+                                )
+                                if subir_doc:
+                                    em.guardar_documento_adjunto(num_ctrl, k_col, subir_doc, ruta_carpeta, guardar_sync_fn=guardar_archivo_sync)
+                                    em.guardar_expediente_colaborador(
+                                        num_ctrl,
+                                        {k_col: "True"},
+                                        ruta_carpeta,
+                                        guardar_sync_fn=guardar_archivo_sync,
+                                        github_token=GITHUB_TOKEN,
+                                        repo_name=REPO_NAME
+                                    )
+                                    leer_tabla_access.clear()
+                                    st.success(f"¡{etiqueta} adjuntado exitosamente!")
+                                    st.rerun()
+
+                    # Formulario de edición y actualización del expediente
+                    with st.expander("✏️ Editar Ficha Técnica y Estatus Documental del Colaborador"):
+                        with st.form(f"form_editar_exp_{num_ctrl}"):
+                            st.markdown("##### 📝 Datos Personales y Contractuales")
+                            fe_c1, fe_c2, fe_c3 = st.columns(3)
+                            with fe_c1:
+                                edit_nombre = st.text_input("Nombre Completo:", value=nombre_disp)
+                                edit_curp   = st.text_input("CURP:", value=curp)
+                                edit_tel    = st.text_input("Teléfono de Contacto:", value=telefono if telefono != "N/D" else "")
+                            with fe_c2:
+                                puestos_opts = AREAS_LISTA_RAW if 'AREAS_LISTA_RAW' in globals() else ["⚪ Sin Asignar", "👑 Dirección", "⚙️ Ingeniería", "✂️ Corte Laser", "📐 Doblez", "🎨 Pintura", "📦 Embarque"]
+                                idx_puesto = 0
+                                for ip, op in enumerate(puestos_opts):
+                                    if puesto_disp.lower() in op.lower():
+                                        idx_puesto = ip
+                                        break
+                                edit_puesto = st.selectbox("Puesto / Área Operativa:", puestos_opts, index=idx_puesto)
+                                edit_rfc    = st.text_input("RFC:", value=rfc)
+                                edit_sangre = st.text_input("Tipo de Sangre:", value=sangre if sangre != "N/D" else "")
+                            with fe_c3:
+                                edit_ingreso = st.text_input("Fecha de Ingreso (DD/MM/AAAA):", value=ingreso[:10] if ingreso else "")
+                                edit_nss     = st.text_input("NSS (IMSS):", value=nss)
+                                edit_emerg   = st.text_input("Contacto de Emergencia:", value=_limpiar_texto(fila.get("Contacto_Emergencia", "")))
+
+                            st.markdown("##### 🏥 Información Médica")
+                            fm_c1, fm_c2 = st.columns(2)
+                            with fm_c1:
+                                edit_padecim = st.text_area("Padecimientos Crónicos:", value=padecim if padecim != "NINGUNO" else "")
+                            with fm_c2:
+                                edit_alergias = st.text_area("Alergias Conocidas:", value=alergias if alergias != "NINGUNA" else "")
+
+                            st.markdown("##### 📁 Control de Documentos Físicos/Digitales Entregados")
+                            cd_c1, cd_c2 = st.columns(2)
+                            check_vals = {}
+                            for idx_d, (k_col, etiqueta) in enumerate(em.LISTA_DOCS_EXPEDIENTE):
+                                col_box = cd_c1 if idx_d % 2 == 0 else cd_c2
+                                with col_box:
+                                    val_actual = dict_docs[k_col]["entregado"]
+                                    check_vals[k_col] = st.checkbox(f"{etiqueta}", value=val_actual, key=f"chk_f_{num_ctrl}_{k_col}")
+
+                            btn_guardar_exp = st.form_submit_button("💾 Guardar y Sincronizar Expediente Digital", type="primary")
+
+                            if btn_guardar_exp:
+                                datos_nuevos = {
+                                    "Nombre_Empleado_Robotica": edit_nombre,
+                                    "Puesto": edit_puesto,
+                                    "Fecha_de_Ingreso": f"{edit_ingreso} 12:00:00 a. m." if edit_ingreso else "",
+                                    "CURP": edit_curp,
+                                    "RFC": edit_rfc,
+                                    "NSS": edit_nss,
+                                    "Telefono:": edit_tel,
+                                    "Tipo_Sangre": edit_sangre,
+                                    "Padecimientos:": edit_padecim or "NINGUNO",
+                                    "Alergias:": edit_alergias or "NINGUNA",
+                                    "Contacto_Emergencia": edit_emerg
+                                }
+                                for k_chk, v_chk in check_vals.items():
+                                    datos_nuevos[k_chk] = "True" if v_chk else "False"
+
+                                ok_save = em.guardar_expediente_colaborador(
+                                    num_ctrl,
+                                    datos_nuevos,
+                                    ruta_carpeta,
+                                    archivo_personal_path=ARCHIVO_PERSONAL,
+                                    guardar_sync_fn=guardar_archivo_sync,
+                                    github_token=GITHUB_TOKEN,
+                                    repo_name=REPO_NAME
+                                )
+                                if ok_save:
+                                    leer_tabla_access.clear()
+                                    st.success("✅ Expediente de personal actualizado y sincronizado exitosamente.")
+                                    st.rerun()
+                                else:
+                                    st.error("❌ No se pudo guardar el expediente.")
 
                     st.write("---")
                     
@@ -3185,7 +3389,8 @@ with tab_expedientes:
                         data=buf_cursos,
                         file_name="historial_capacitacion_sigrama.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="dl_historial_cap"
+                        key="dl_historial_cap",
+                        on_click="ignore"
                     )
 
             # ─────────────────────────────────────────────
@@ -3792,7 +3997,8 @@ with tab_txt:
                         mime="application/pdf",
                         type="primary",
                         use_container_width=True,
-                        key="btn_dl_ult_pdf"
+                        key="btn_dl_ult_pdf",
+                        on_click="ignore"
                     )
                 with c_ult2:
                     st.markdown("<br>", unsafe_allow_html=True)
@@ -3932,7 +4138,8 @@ with tab_txt:
                         mime="application/pdf",
                         use_container_width=True,
                         type="secondary",
-                        key="txt_pdf_direct_btn"
+                        key="txt_pdf_direct_btn",
+                        on_click="ignore"
                     )
 
                 if guardar_btn:
@@ -4170,7 +4377,8 @@ with tab_txt:
                 data=buf_saldo,
                 file_name="resumen_banco_txt_sigrama.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="dl_saldo_txt"
+                key="dl_saldo_txt",
+                on_click="ignore"
             )
 
             # ── Estado de Cuenta PDF por colaborador ──────────────────────
@@ -4210,7 +4418,8 @@ with tab_txt:
                     file_name=f"EstadoCuenta_TxT_{id_emp_pdf_sel}.pdf",
                     mime="application/pdf",
                     type="primary",
-                    key=f"btn_dl_banco_{id_emp_pdf_sel}"
+                    key=f"btn_dl_banco_{id_emp_pdf_sel}",
+                    on_click="ignore"
                 )
 
 
@@ -4291,7 +4500,8 @@ with tab_txt:
                                 file_name=f"FO-RHU-22_{folio_pdf_sel}.pdf",
                                 mime="application/pdf",
                                 type="primary",
-                                key=f"btn_dl_hist_{folio_pdf_sel}"
+                                key=f"btn_dl_hist_{folio_pdf_sel}",
+                                on_click="ignore"
                             )
 
             # Gestor de Cancelación y Borrado de Incidencias (solo Admin)
@@ -4386,7 +4596,8 @@ with tab_txt:
                 data=buf_hist,
                 file_name="historial_incidencias_txt_sigrama.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="dl_hist_txt"
+                key="dl_hist_txt",
+                on_click="ignore"
             )
 
 
@@ -4538,7 +4749,8 @@ with tab_conducta:
             mime="application/pdf",
             type="primary",
             use_container_width=True,
-            key="btn_dl_codigo_conducta_pdf"
+            key="btn_dl_codigo_conducta_pdf",
+            on_click="ignore"
         )
 
     st.write("---")

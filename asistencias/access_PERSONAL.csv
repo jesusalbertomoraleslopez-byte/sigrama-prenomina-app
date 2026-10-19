@@ -1,7 +1,18 @@
-﻿"Numero_Control_Personal","Nombre_Empleado_Robotica","Puesto","Fecha_de_Ingreso","CURP","CURP_ARCHIVO","RFC","NSS","Curriculum","Fotografia","Descripción_de_Puesto","Tipo_Sangre","Padecimientos:","Alergias:","Telefono:"
-"00001","JESUS ALBERTO MORALES LOPEZ","Director de Planta","24/07/2025 12:00:00 a. m.","MOLJ780405HCLRPS00","","MOJL780405EL3","32017808760","","System.Byte[]","","O+","NINGUNO","NINGUNA","8717954493"
-"00002"," BRYAN MACINAS","Jefe de Laser","","","","","","","System.Byte[]","FO-RHU-01-R00 - Jefe de Laser.docx;FO-RHU-01-R00 - Jefe de Laser.pdf","","","",""
-"00003","CRUZ EDUARDO CARREÓN RIOS","Jefe de Doblez","","","","","","","System.Byte[]","FO-RHU-01-R00 - Jefe de Doblez.docx;FO-RHU-01-R00 - Jefe de Doblez.pdf","","","",""
-"00004","ARMANDO WOO","Ingeniero de Producto","05/02/2026 12:00:00 a. m.","","","","","","System.Byte[]","FO-RHU-01-R00 - Jefe de Ingenieria.docx;FO-RHU-01-R00 - Jefe de Ingenieria.pdf","","","",""
-"00005","LUIS ALFREDO QUINTANA PALMA","JEFE DE PINTURA","","","","","","","System.Byte[]","FO-RHU-01-R00 - Jefe de Pintura.docx;FO-RHU-01-R00 - Jefe de Pintura.pdf","","","",""
-"00006","MARVIN","Operador Laser","","","","","","","System.Byte[]","FO-RHU-01-R00 - Operador de Laser.docx;FO-RHU-01-R00 - Operador de Laser.pdf","","","",""
+﻿Numero_Control_Personal,Nombre_Empleado_Robotica,Puesto,Fecha_de_Ingreso,CURP,CURP_ARCHIVO,RFC,NSS,Curriculum,Fotografia,Descripción_de_Puesto,Tipo_Sangre,Padecimientos:,Alergias:,Telefono:,Contacto_Emergencia,Estatus_Expediente,Doc_INE,Doc_CURP,Doc_RFC,Doc_NSS,Doc_Domicilio,Doc_Contrato,Doc_Alta_IMSS,Doc_CV
+01247,JESUS ALBERTO MORALES LOPEZ,Director de Planta,24/07/2025 12:00:00 a. m.,MOLJ780405HCLRPS00,,MOJL780405EL3,32017808760,,System.Byte[],,O+,NINGUNO,NINGUNA,8717954493,,,,,,,,,,
+01293, BRYAN MACINAS,Jefe de Laser,05/05/2026 12:00:00 a. m.,,,,,,System.Byte[],FO-RHU-01-R00 - Jefe de Laser.docx;FO-RHU-01-R00 - Jefe de Laser.pdf,,,,,,,,,,,,,,
+01370,CRUZ EDUARDO CARREÓN RIOS,Jefe de Doblez,05/05/2026 12:00:00 a. m.,,,,,,System.Byte[],FO-RHU-01-R00 - Jefe de Doblez.docx;FO-RHU-01-R00 - Jefe de Doblez.pdf,,,,,,,,,,,,,,
+01145,ARMANDO WOO,Ingeniero de Producto,05/02/2026 12:00:00 a. m.,,,,,,System.Byte[],FO-RHU-01-R00 - Jefe de Ingenieria.docx;FO-RHU-01-R00 - Jefe de Ingenieria.pdf,,,,,,,,,,,,,,
+01371,LUIS ALFREDO QUINTANA PALMA,JEFE DE PINTURA,05/05/2026 12:00:00 a. m.,,,,,,System.Byte[],FO-RHU-01-R00 - Jefe de Pintura.docx;FO-RHU-01-R00 - Jefe de Pintura.pdf,,,,,,,,,,,,,,
+01363,MARVIN,Operador Laser,05/05/2026 12:00:00 a. m.,,,,,,System.Byte[],FO-RHU-01-R00 - Operador de Laser.docx;FO-RHU-01-R00 - Operador de Laser.pdf,,,,,,,,,,,,,,
+01447,JESUS MANUEL CAMPOS MARTINEZ,✂️ Corte Laser,06/05/2026 12:00:00 a. m.,,,,,,,,N/D,NINGUNO,NINGUNA,,,🔴 Incompleto (0/8 Documentos),False,False,False,False,False,False,False,False
+01455,JESUS ALEJANDRO PEREZ HERNANDEZ,✂️ Corte Laser,14/05/2026 12:00:00 a. m.,,,,,,,,N/D,NINGUNO,NINGUNA,,,🔴 Incompleto (0/8 Documentos),False,False,False,False,False,False,False,False
+00932,JOSE RODOLFO FERNANDEZ MUÑIZ,⚙️ Ingeniería,18/05/2026 12:00:00 a. m.,,,,,,,,N/D,NINGUNO,NINGUNA,,,🔴 Incompleto (0/8 Documentos),False,False,False,False,False,False,False,False
+01446,LUIS ALEJANDRO ALVARADO AGUILAR,📐 Doblez,06/05/2026 12:00:00 a. m.,,,,,,,,N/D,NINGUNO,NINGUNA,,,🔴 Incompleto (0/8 Documentos),False,False,False,False,False,False,False,False
+01134,MIGUEL ANTONIO ALVARADO ROJAS,📦 Embarque,07/05/2026 12:00:00 a. m.,,,,,,,,N/D,NINGUNO,NINGUNA,,,🔴 Incompleto (0/8 Documentos),False,False,False,False,False,False,False,False
+01445,URIEL ALEJANDRO GARCIA MONTOYA,📐 Doblez,06/05/2026 12:00:00 a. m.,,,,,,,,N/D,NINGUNO,NINGUNA,,,🔴 Incompleto (0/8 Documentos),False,False,False,False,False,False,False,False
+01477,DAVID ALEJANDRO HERNANDEZ RODRIGUEZ,📐 Doblez,27/05/2026 12:00:00 a. m.,,,,,,,,N/D,NINGUNO,NINGUNA,,,🔴 Incompleto (0/8 Documentos),False,False,False,False,False,False,False,False
+01626,CARREON LOPEZ / CRUZ,⚪ Sin Asignar,05/10/2026 12:00:00 a. m.,,,,,,,,N/D,NINGUNO,NINGUNA,,,🔴 Incompleto (0/8 Documentos),False,False,False,False,False,False,False,False
+01624,MORENO RIOS / MAXIMILIANO,⚪ Sin Asignar,05/10/2026 12:00:00 a. m.,,,,,,,,N/D,NINGUNO,NINGUNA,,,🔴 Incompleto (0/8 Documentos),False,False,False,False,False,False,False,False
+01625,VAZQUEZ PADILLA / NATALY CRISTAL,⚪ Sin Asignar,05/10/2026 12:00:00 a. m.,,,,,,,,N/D,NINGUNO,NINGUNA,,,🔴 Incompleto (0/8 Documentos),False,False,False,False,False,False,False,False
+01636,GARCIA LOERA / DAVID FERNANDO,⚪ Sin Asignar,07/10/2026 12:00:00 a. m.,,,,,,,,N/D,NINGUNO,NINGUNA,,,🔴 Incompleto (0/8 Documentos),False,False,False,False,False,False,False,False
