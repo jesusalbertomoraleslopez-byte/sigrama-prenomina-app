@@ -259,22 +259,37 @@ div[data-baseweb="select"]:focus-within {
 }
 
 /* ==========================================
-   PESTAÑAS (TABS)
+   PESTAÑAS (TABS) - ESTILO GOOGLE WORKSPACE PILLS
    ========================================== */
+div[data-baseweb="tab-list"] {
+    gap: 8px !important;
+    background: transparent !important;
+    border-bottom: 1px solid #E2E8F0 !important;
+    padding-bottom: 6px !important;
+}
 button[data-baseweb="tab"] {
-    font-family: 'Montserrat', sans-serif !important;
+    font-family: 'Questrial', sans-serif !important;
+    font-size: 15px !important;
     font-weight: 500 !important;
-    color: #111111 !important;
-    border-bottom: 2px solid transparent !important;
-    transition: all 0.2s ease !important;
+    color: #475569 !important;
+    padding: 8px 18px !important;
+    border-radius: 20px !important;
+    border: none !important;
+    transition: all 0.18s ease-in-out !important;
+    background: transparent !important;
 }
 button[data-baseweb="tab"]:hover {
-    color: #EC2024 !important;
+    color: #0F172A !important;
+    background-color: #F1F5F9 !important;
 }
 button[data-baseweb="tab"][aria-selected="true"] {
-    color: #EC2024 !important;
+    color: #FFFFFF !important;
     font-weight: 700 !important;
-    border-bottom: 2px solid #EC2024 !important;
+    background-color: #EC2024 !important;
+    box-shadow: 0 2px 6px rgba(236, 32, 36, 0.35) !important;
+}
+div[data-baseweb="tab-highlight"] {
+    display: none !important;
 }
 
 /* ==========================================
@@ -894,13 +909,13 @@ if st.session_state["usuario_rol"] is None:
 
 # Declaración actualizada de las pestañas de la aplicación
 tab_reportes, tab_areas, tab_historico, tab_industria, tab_expedientes, tab_txt, tab_conducta = st.tabs([
-    "📊 Pre-Nómina y Reportes", 
-    "📁 Asignación de Áreas y Personal",
-    "📈 Histórico Semanal",
-    "🤖 Manufactura Inteligente & Stack",
-    "🎓 Expedientes & Capacitaciones",
-    "⏱️ Banco TxT",
-    "📜 Código de Conducta"
+    "📊 Prenómina", 
+    "📁 Personal",
+    "📈 Histórico",
+    "🤖 Industria",
+    "🎓 Expedientes",
+    "⏱️ Tiempo",
+    "📜 Conducta"
 ])
 
 
