@@ -7,6 +7,8 @@ import streamlit.components.v1 as components
 import pandas as pd
 import glob
 import os
+import re
+import sys
 import io
 import requests
 import base64
@@ -188,6 +190,45 @@ h1, h2, h3, h4, h5, h6 {
     background-color: #B81216 !important;
     border-color: #B81216 !important;
 }
+
+
+/* ==========================================
+   MENÚ LATERAL - TARJETA, TÍTULOS, CAMPOS
+   ========================================== */
+.sb-user-card { display:flex; align-items:center; gap:10px; background:#1E1E1E; border:1px solid #333;
+    border-left:4px solid #EC2024; border-radius:10px; padding:10px 12px; margin:6px 0 10px 0; }
+.sb-user-avatar { font-size:22px; background:#2A2A2A; border-radius:50%; width:38px; height:38px;
+    display:flex; align-items:center; justify-content:center; }
+.sb-user-name { color:#FFFFFF; font-weight:700; font-size:14px; line-height:1.2; }
+.sb-user-role { color:#D2D3D5; font-size:12px; margin-top:2px; }
+.sb-title { color:#FFFFFF; font-family:'Montserrat',sans-serif; font-weight:700; font-size:14px;
+    letter-spacing:.3px; border-bottom:2px solid #EC2024; padding:14px 0 6px 0; margin:10px 0 8px 0; }
+.sb-status { background:#1E1E1E; border:1px solid #333; border-radius:8px; padding:8px 12px;
+    color:#FFFFFF; font-size:12.5px; line-height:1.6; }
+[data-testid="stSidebar"] hr { margin:0.8rem 0 !important; }
+
+/* Campos del sidebar: fondo blanco con texto oscuro SIEMPRE legible */
+[data-testid="stSidebar"] div[data-baseweb="input"],
+[data-testid="stSidebar"] div[data-baseweb="base-input"],
+[data-testid="stSidebar"] div[data-baseweb="select"] > div {
+    background-color:#FFFFFF !important; border-radius:6px !important; }
+[data-testid="stSidebar"] div[data-baseweb="input"] input,
+[data-testid="stSidebar"] div[data-baseweb="select"] *,
+[data-testid="stSidebar"] [data-testid="stDateInput"] input,
+[data-testid="stSidebar"] [data-testid="stTimeInput"] * {
+    color:#111111 !important; -webkit-text-fill-color:#111111 !important; }
+
+/* Zona de carga (compatible con versiones nuevas de Streamlit) */
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
+    border:2px dashed #D2D3D5 !important; background-color:#222222 !important; border-radius:8px !important; }
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] *,
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] small,
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] span {
+    color:#FFFFFF !important; -webkit-text-fill-color:#FFFFFF !important; }
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button {
+    background-color:#EC2024 !important; color:#FFFFFF !important; border:1px solid #EC2024 !important;
+    font-weight:600 !important; border-radius:4px !important; }
+[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] button * { color:#FFFFFF !important; }
 
 /* ==========================================
    BOTONES CORPORATIVOS (#EC2024)
@@ -494,6 +535,79 @@ def sincronizar_archivos_red(dir_destino="asistencias") -> int:
     return nuevos_o_actualizados
 
 
+def sincronizar_archivos_outlook(dir_destino="asistencias") -> tuple[int, list[str]]:
+    """
+    Sincroniza automáticamente los archivos adjuntos .xls desde Microsoft Outlook
+    enviados por el sistema checador (noreply@sigrama.com.mx).
+    """
+    if sys.platform != "win32":
+        return 0, []
+    try:
+        import win32com.client
+        outlook = win32com.client.Dispatch("Outlook.Application")
+        namespace = outlook.GetNamespace("MAPI")
+    except Exception:
+        return 0, []
+
+    folder_target = None
+    try:
+        for acc in namespace.Folders:
+            try:
+                inbox = acc.Folders["Bandeja de entrada"]
+                for f1 in inbox.Folders:
+                    if "sigrama" in f1.Name.lower():
+                        for f2 in f1.Folders:
+                            if "asistencia" in f2.Name.lower():
+                                folder_target = f2
+                                break
+                    if folder_target:
+                        break
+            except Exception:
+                pass
+            if folder_target:
+                break
+    except Exception:
+        pass
+
+    items_to_check = []
+    if folder_target:
+        items_to_check = list(folder_target.Items)
+    else:
+        try:
+            inbox_default = namespace.GetDefaultFolder(6)  # olFolderInbox
+            items_to_check = list(inbox_default.Items)
+        except Exception:
+            return 0, []
+
+    os.makedirs(dir_destino, exist_ok=True)
+    archivos_existentes = set(os.listdir(dir_destino))
+    archivos_descargados = []
+
+    for item in items_to_check:
+        try:
+            subject = getattr(item, "Subject", "")
+            subj_upper = subject.upper()
+            if (
+                "ASISTENCIA DIARIA" in subj_upper or 
+                "MAQUINADOS" in subj_upper or 
+                "PRE-NÓMINA" in subj_upper or 
+                "PRE-NOMINA" in subj_upper
+            ):
+                if hasattr(item, "Attachments") and item.Attachments.Count > 0:
+                    for att in item.Attachments:
+                        fname = att.FileName
+                        if fname.lower().endswith((".xls", ".xlsx")) and not fname.startswith("~$"):
+                            if fname not in archivos_existentes:
+                                dest_path = os.path.join(dir_destino, fname).replace("\\", "/")
+                                att.SaveAsFile(dest_path)
+                                archivos_existentes.add(fname)
+                                archivos_descargados.append(fname)
+        except Exception:
+            continue
+
+    return len(archivos_descargados), archivos_descargados
+
+
 @st.cache_data
 def procesar_base_asistencias(carpeta):
     # Sincronización automática de red si la ruta Q:\ está disponible
@@ -613,6 +727,40 @@ def recalcular_historico_completo(ruta_dir_asistencias, archivo_personal_path, l
     return pd.DataFrame(renglones)
 
 
+def _sb_titulo(icono, texto):
+    """Título de sección uniforme para el menú lateral."""
+    st.sidebar.markdown(
+        f'<div class="sb-title"><span>{icono}</span> {texto}</div>',
+        unsafe_allow_html=True
+    )
+
+
+def _outlook_disponible():
+    """True solo en una PC Windows con Outlook/pywin32 (nunca en la nube)."""
+    if sys.platform != "win32":
+        return False
+    try:
+        import win32com.client  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _estado_base_asistencias(carpeta):
+    """Devuelve (# de reportes diarios, fecha del último reporte) de la carpeta de asistencias."""
+    fechas = []
+    for f in glob.glob(os.path.join(carpeta, "MAQUINADOS_2*.xls")):
+        m = re.match(r"MAQUINADOS_(\d{8})\.xls$", os.path.basename(f))
+        if m:
+            try:
+                fechas.append(datetime.strptime(m.group(1), "%Y%m%d"))
+            except ValueError:
+                pass
+    if not fechas:
+        return 0, "—"
+    return len(fechas), max(fechas).strftime("%d/%m/%Y")
+
+
 # ==============================================================================
 # SECCIÓN 2 - PANEL LATERAL Y CARGADOR DE ARCHIVOS
 # ================================================# Variables por defecto para evitar errores al cargar la app sin sesión
@@ -640,18 +788,46 @@ if os.path.exists(logo_sidebar):
 
 # Control de Acceso en Sidebar
 if st.session_state["usuario_rol"] is not None:
-    st.sidebar.write(f"👤 **Usuario:** `{st.session_state['usuario_name']}`")
-    st.sidebar.write(f"💼 **Rol:** `{st.session_state['usuario_rol']}`")
+    st.sidebar.markdown(
+        f'''<div class="sb-user-card">
+            <div class="sb-user-avatar">👤</div>
+            <div class="sb-user-info">
+                <div class="sb-user-name">{st.session_state['usuario_name']}</div>
+                <div class="sb-user-role">💼 {st.session_state['usuario_rol']}</div>
+            </div>
+        </div>''',
+        unsafe_allow_html=True
+    )
     if st.sidebar.button("🔒 Cerrar Sesión", use_container_width=True, key="sidebar_logout_btn"):
         st.session_state["usuario_rol"] = None
         st.session_state["usuario_name"] = None
         st.rerun()
-        
-    st.sidebar.markdown("---")
-    st.sidebar.header("⚙️ Configuración del Periodo")
-    
-    # Cargador de archivos en espera
-    st.sidebar.subheader("📥 Cargar Nuevas Asistencias")
+
+    # ---- 1) PERIODO DE ANÁLISIS ----
+    _sb_titulo("📅", "Periodo de Análisis")
+    hora_limite_input = st.sidebar.time_input(
+        "Hora límite de Entrada:",
+        value=datetime.strptime("08:01:00", "%H:%M:%S").time()
+    )
+    fecha_inicio = st.sidebar.date_input("Fecha Inicio:", value=defecto_inicio)
+    fecha_fin = st.sidebar.date_input("Fecha Fin:", value=defecto_fin)
+
+    # ---- 2) ESTADO DE LA BASE DE ASISTENCIAS ----
+    _sb_titulo("📊", "Base de Asistencias")
+    _n_arch, _ultimo = _estado_base_asistencias(ruta_carpeta)
+    if _n_arch:
+        st.sidebar.markdown(
+            f'''<div class="sb-status">
+                <div><b>{_n_arch}</b> reportes cargados</div>
+                <div>Último reporte: <b>{_ultimo}</b></div>
+            </div>''',
+            unsafe_allow_html=True
+        )
+    else:
+        st.sidebar.warning("Aún no hay reportes de asistencia cargados.")
+
+    # ---- 3) CARGA MANUAL ----
+    _sb_titulo("📥", "Cargar Asistencias (manual)")
     
     # Mostrar mensaje de éxito si existe en el estado de sesión y limpiarlo
     if "mensaje_exito" in st.session_state and st.session_state["mensaje_exito"]:
@@ -766,11 +942,53 @@ if st.session_state["usuario_rol"] is not None:
                     
                     status.update(label="✅ ¡Archivos e historial sincronizados!", state="complete")
                     st.rerun()
+    # Sincronización automática desde Outlook
+    if _outlook_disponible():
+        _sb_titulo("📧", "Sincronizar desde Outlook")
+        st.sidebar.caption("Descarga los reportes del checador (noreply@sigrama.com.mx).")
+        btn_sync_out = st.sidebar.button("📥 Sincronizar desde Outlook", use_container_width=True, key="btn_sync_outlook")
+    else:
+        btn_sync_out = False
+    if btn_sync_out:
+        with st.sidebar.status("Conectando con Outlook y buscando reportes...", expanded=True) as status_out:
+            n_out, files_out = sincronizar_archivos_outlook(ruta_carpeta)
+            if n_out > 0:
+                df_h = recalcular_historico_completo(ruta_carpeta, ARCHIVO_PERSONAL, hora_limite_input)
+                if not df_h.empty:
+                    df_h.to_excel(ARCHIVO_HISTORICO, index=False)
+                    guardar_archivo_sync(ARCHIVO_HISTORICO)
+                    if GITHUB_TOKEN:
+                        try:
+                            # Subir cada archivo nuevo a GitHub
+                            for f_out_name in files_out:
+                                p_local = os.path.join(ruta_carpeta, f_out_name).replace("\\", "/")
+                                with open(p_local, "rb") as f_bytes:
+                                    c_bytes = f_bytes.read()
+                                url_api_f = f"https://api.github.com/repos/{REPO_NAME}/contents/asistencias/{f_out_name}"
+                                headers_gh = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json", "User-Agent": "Streamlit-App"}
+                                requests.put(url_api_f, json={"message": f"Sync auto Outlook: {f_out_name}", "content": base64.b64encode(c_bytes).decode("utf-8")}, headers=headers_gh, timeout=15)
+                            
+                            # Subir histórico actualizado
+                            with open(ARCHIVO_HISTORICO, "rb") as fh:
+                                c_hist = fh.read()
+                            url_api_hist = f"https://api.github.com/repos/{REPO_NAME}/contents/asistencias/historico_semanal.xlsx"
+                            res_gh = requests.get(url_api_hist, headers=headers_gh, timeout=10)
+                            sha_h = res_gh.json().get("sha") if res_gh.status_code == 200 else None
+                            payload_h = {"message": "Sync auto Outlook: historico_semanal.xlsx", "content": base64.b64encode(c_hist).decode("utf-8")}
+                            if sha_h: payload_h["sha"] = sha_h
+                            requests.put(url_api_hist, json=payload_h, headers=headers_gh, timeout=15)
+                        except Exception:
+                            pass
+                st.cache_data.clear()
+                status_out.update(label=f"✅ ¡{n_out} reporte(s) nuevo(s) importado(s) desde Outlook!", state="complete")
+                st.rerun()
+            else:
+                status_out.update(label="ℹ️ Todo al día. No hay reportes nuevos en Outlook.", state="complete")
+
     # Sincronización automática desde Rutas Locales y Red (Q: y Google Drive)
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 📡 Sincronización Local y de Red")
     rutas_conectadas = [r for r in RUTAS_ORIGEN_LOCALES if os.path.exists(r)]
     if rutas_conectadas:
+        _sb_titulo("📡", "Sincronización Local y de Red")
         st.sidebar.success(f"✅ **Rutas Locales Conectadas ({len(rutas_conectadas)}):** Red Q: / Google Drive")
         if st.sidebar.button("🔄 Sincronizar Reloj desde Rutas Locales", use_container_width=True, key="btn_sync_q_drive"):
             with st.sidebar.status("Sincronizando archivos de asistencia desde tu PC...", expanded=True) as status_q:
@@ -799,17 +1017,7 @@ if st.session_state["usuario_rol"] is not None:
                 status_q.update(label=f"✅ {n_sync} archivo(s) sincronizado(s) desde la PC.", state="complete")
                 st.rerun()
     else:
-        st.sidebar.info("🌐 **Rutas Locales:** Servidor en la nube o rutas inaccesibles.")
-    # Selección de Hora Límite
-    hora_limite_input = st.sidebar.time_input(
-        "Hora límite de Entrada:", 
-        value=datetime.strptime("08:01:00", "%H:%M:%S").time()
-    )
-    
-    # Selección de Fechas de Quincena
-    st.sidebar.subheader("📅 Fechas de la Quincena")
-    fecha_inicio = st.sidebar.date_input("Fecha Inicio:", value=defecto_inicio)
-    fecha_fin = st.sidebar.date_input("Fecha Fin:", value=defecto_fin)
+        st.sidebar.caption("☁️ Modo nube: los reportes se actualizan automáticamente desde la PC de RH.")
 else:
     st.sidebar.info("🔐 Por favor, inicie sesión en la pantalla principal para configurar la aplicación.")
 
