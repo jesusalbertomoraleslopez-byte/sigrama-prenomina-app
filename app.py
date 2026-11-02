@@ -150,9 +150,9 @@ h1, h2, h3, h4, h5, h6 {
     border-right: 1px solid #D2D3D5 !important;
 }
 
-/* Todos los textos del sidebar en blanco */
+/* Todos los textos del sidebar en blanco (excepto iconos Material y textos dentro de inputs) */
 [data-testid="stSidebar"] p, 
-[data-testid="stSidebar"] span, 
+[data-testid="stSidebar"] span:not([data-testid="stIconMaterial"]), 
 [data-testid="stSidebar"] label,
 [data-testid="stSidebar"] h1, 
 [data-testid="stSidebar"] h2, 
@@ -162,6 +162,13 @@ h1, h2, h3, h4, h5, h6 {
 [data-testid="stSidebar"] h6 {
     color: #FFFFFF !important;
     font-family: 'Questrial', sans-serif !important;
+}
+
+/* Preservar fuente de iconos Material de Streamlit (evita 'keyboard_double_arrow_left') */
+[data-testid="stSidebar"] [data-testid="stIconMaterial"],
+[data-testid="stIconMaterial"],
+.material-symbols-rounded {
+    font-family: "Material Symbols Rounded" !important;
 }
 
 /* Inputs en la barra lateral */
@@ -207,16 +214,47 @@ h1, h2, h3, h4, h5, h6 {
     color:#FFFFFF; font-size:12.5px; line-height:1.6; }
 [data-testid="stSidebar"] hr { margin:0.8rem 0 !important; }
 
-/* Campos del sidebar: fondo blanco con texto oscuro SIEMPRE legible */
+/* Campos del sidebar: fondo blanco con texto negro (#111111) de alto contraste SIEMPRE legible */
 [data-testid="stSidebar"] div[data-baseweb="input"],
 [data-testid="stSidebar"] div[data-baseweb="base-input"],
-[data-testid="stSidebar"] div[data-baseweb="select"] > div {
-    background-color:#FFFFFF !important; border-radius:6px !important; }
-[data-testid="stSidebar"] div[data-baseweb="input"] input,
-[data-testid="stSidebar"] div[data-baseweb="select"] *,
+[data-testid="stSidebar"] div[data-baseweb="select"] > div,
 [data-testid="stSidebar"] [data-testid="stDateInput"] input,
-[data-testid="stSidebar"] [data-testid="stTimeInput"] * {
-    color:#111111 !important; -webkit-text-fill-color:#111111 !important; }
+[data-testid="stSidebar"] [data-testid="stTimeInput"] input {
+    background-color:#FFFFFF !important;
+    border-radius:6px !important;
+}
+[data-testid="stSidebar"] [data-testid="stDateInput"] *,
+[data-testid="stSidebar"] [data-testid="stTimeInput"] *,
+[data-testid="stSidebar"] [data-testid="stTextInput"] *,
+[data-testid="stSidebar"] [data-testid="stNumberInput"] *,
+[data-testid="stSidebar"] [data-testid="stSelectbox"] *,
+[data-testid="stSidebar"] div[data-baseweb="input"] *,
+[data-testid="stSidebar"] div[data-baseweb="base-input"] *,
+[data-testid="stSidebar"] div[data-baseweb="select"] *,
+[data-testid="stSidebar"] input {
+    color:#111111 !important;
+    -webkit-text-fill-color:#111111 !important;
+    font-weight:600 !important;
+}
+/* Etiquetas (labels) de los campos en el sidebar SIEMPRE blancas sobre fondo oscuro */
+[data-testid="stSidebar"] label[data-testid="stWidgetLabel"],
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] *,
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p,
+[data-testid="stSidebar"] [data-testid="stWidgetLabel"] span,
+[data-testid="stSidebar"] [data-testid="stDateInput"] > label,
+[data-testid="stSidebar"] [data-testid="stDateInput"] > label *,
+[data-testid="stSidebar"] [data-testid="stTimeInput"] > label,
+[data-testid="stSidebar"] [data-testid="stTimeInput"] > label *,
+[data-testid="stSidebar"] [data-testid="stTextInput"] > label,
+[data-testid="stSidebar"] [data-testid="stTextInput"] > label *,
+[data-testid="stSidebar"] [data-testid="stNumberInput"] > label,
+[data-testid="stSidebar"] [data-testid="stNumberInput"] > label *,
+[data-testid="stSidebar"] [data-testid="stSelectbox"] > label,
+[data-testid="stSidebar"] [data-testid="stSelectbox"] > label * {
+    color:#FFFFFF !important;
+    -webkit-text-fill-color:#FFFFFF !important;
+    background-color:transparent !important;
+}
 
 /* Zona de carga (compatible con versiones nuevas de Streamlit) */
 [data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {
