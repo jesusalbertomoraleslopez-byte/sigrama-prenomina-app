@@ -5,3 +5,8 @@ __pycache__
 .git
 .github
 .streamlit/secrets.toml
+
+PERSONAL.accdb
+*.log
+sincronizar_asistencias_outlook.bat
+sincronizar_asistencias_outlook.py

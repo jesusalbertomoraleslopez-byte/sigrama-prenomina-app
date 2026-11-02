@@ -1,12 +1,14 @@
 """
-Script de sincronización automática de asistencias desde Microsoft Outlook.
+Script de sincronización automática de asistencias desde Microsoft Outlook hacia:
+1. Carpeta local 'asistencias/'
+2. Google Cloud Storage (gs://sigrama-prenomina-storage/asistencias/) para Google Cloud Run
+3. Repositorio GitHub (origin/main)
 Extrae los archivos adjuntos .xls enviados por el sistema checador (noreply@sigrama.com.mx)
-con asunto 'ASISTENCIA DIARIA: MAQUINADOS DEL ...' y los guarda en la carpeta 'asistencias/'.
+con asunto 'ASISTENCIA DIARIA: MAQUINADOS DEL ...'.
 """
 
 import os
 import sys
-import glob
 import subprocess
 from datetime import datetime
 
@@ -14,6 +16,8 @@ from datetime import datetime
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DIR_ASISTENCIAS = os.path.join(BASE_DIR, "asistencias").replace("\\", "/")
 LOG_FILE = os.path.join(BASE_DIR, "sync_outlook.log").replace("\\", "/")
+GCS_BUCKET_NAME = "sigrama-prenomina-storage"
+GCLOUD_CMD = r"C:\Users\albertol\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"
 
 
 def log(msg: str):
@@ -45,7 +49,6 @@ def sincronizar_desde_outlook(dir_destino: str = DIR_ASISTENCIAS) -> list[str]:
         log(f"ERROR al conectar con Outlook: {e}")
         return []
 
-    # Localizar la carpeta específica donde el usuario guarda las asistencias
     folder_target = None
     try:
         for acc in namespace.Folders:
@@ -66,7 +69,6 @@ def sincronizar_desde_outlook(dir_destino: str = DIR_ASISTENCIAS) -> list[str]:
     except Exception as e:
         log(f"Advertencia al buscar carpeta: {e}")
 
-    # Si no se encontró la subcarpeta, buscar en la Bandeja de Entrada por defecto
     items_to_check = []
     if folder_target:
         log(f"Carpeta detectada: {folder_target.Name} ({folder_target.Items.Count} correos)")
@@ -88,8 +90,6 @@ def sincronizar_desde_outlook(dir_destino: str = DIR_ASISTENCIAS) -> list[str]:
         try:
             subject = getattr(item, "Subject", "")
             subj_upper = subject.upper()
-            
-            # Filtrar por los correos de checador
             es_asistencia = (
                 "ASISTENCIA DIARIA" in subj_upper or 
                 "MAQUINADOS" in subj_upper or 
@@ -103,7 +103,6 @@ def sincronizar_desde_outlook(dir_destino: str = DIR_ASISTENCIAS) -> list[str]:
             if hasattr(item, "Attachments") and item.Attachments.Count > 0:
                 for att in item.Attachments:
                     fname = att.FileName
-                    # Solo archivos Excel válidos
                     if fname.lower().endswith((".xls", ".xlsx")) and not fname.startswith("~$"):
                         if fname not in archivos_existentes:
                             dest_path = os.path.join(dir_destino, fname).replace("\\", "/")
@@ -111,10 +110,28 @@ def sincronizar_desde_outlook(dir_destino: str = DIR_ASISTENCIAS) -> list[str]:
                             archivos_existentes.add(fname)
                             archivos_descargados.append(fname)
                             log(f"Descargado: {fname} (Asunto: '{subject}')")
-        except Exception as e:
+        except Exception:
             continue
 
     return archivos_descargados
+
+
+def subir_a_gcs(archivos: list[str], dir_origen: str = DIR_ASISTENCIAS):
+    """Sube los archivos descargados al bucket de Google Cloud Storage para Cloud Run."""
+    if not archivos:
+        return
+    if os.path.exists(GCLOUD_CMD):
+        try:
+            log(f"Subiendo {len(archivos)} archivo(s) a Google Cloud Storage (gs://{GCS_BUCKET_NAME}/asistencias/)...")
+            rutas_locales = [os.path.join(dir_origen, f) for f in archivos]
+            cmd = [GCLOUD_CMD, "storage", "cp"] + rutas_locales + [f"gs://{GCS_BUCKET_NAME}/asistencias/"]
+            res = subprocess.run(cmd, cwd=BASE_DIR, capture_output=True, text=True)
+            if res.returncode == 0:
+                log("Archivos sincronizados en Google Cloud Storage exitosamente.")
+            else:
+                log(f"Aviso en subida a GCS: {res.stderr}")
+        except Exception as e:
+            log(f"Aviso al sincronizar con GCS: {e}")
 
 
 def ejecutar_sync():
@@ -124,7 +141,10 @@ def ejecutar_sync():
     if descargados:
         log(f"Se descargaron {len(descargados)} archivo(s) nuevo(s): {', '.join(descargados)}")
         
-        # Opcional: hacer commit y push a GitHub para que Streamlit Cloud también los reciba
+        # 1. Subir a Google Cloud Storage (Cloud Run)
+        subir_a_gcs(descargados, DIR_ASISTENCIAS)
+
+        # 2. Hacer commit y push a GitHub
         try:
             log("Sincronizando con repositorio Git...")
             subprocess.run(["git", "add", "asistencias/"], cwd=BASE_DIR, check=False)
@@ -148,5 +168,5 @@ def ejecutar_sync():
 
 
 if __name__ == "__main__":
-    total = ejecutar_sync()
+    ejecutar_sync()
     sys.exit(0)

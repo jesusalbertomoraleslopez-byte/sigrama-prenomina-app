@@ -826,7 +826,76 @@ if st.session_state["usuario_rol"] is not None:
     else:
         st.sidebar.warning("Aún no hay reportes de asistencia cargados.")
 
-    # ---- 3) CARGA MANUAL ----
+    # ---- 3) SINCRONIZACIÓN AUTOMÁTICA DEL CHECADOR (OUTLOOK / NUBE) ----
+    _sb_titulo("📧", "Sincronización Correo Checador")
+    st.sidebar.caption("Reportes automáticos de *noreply@sigrama.com.mx* (`ASISTENCIA DIARIA: MAQUINADOS`).")
+    btn_sync_out = st.sidebar.button("🔄 Sincronizar Reportes del Checador", use_container_width=True, key="btn_sync_outlook")
+    if btn_sync_out:
+        with st.sidebar.status("Sincronizando reportes de asistencia del checador...", expanded=True) as status_out:
+            files_out = []
+            if _outlook_disponible():
+                n_out, files_out = sincronizar_archivos_outlook(ruta_carpeta)
+                for f_out_name in files_out:
+                    guardar_archivo_sync(os.path.join(ruta_carpeta, f_out_name))
+            else:
+                # En Google Cloud Run: sincronizar desde GCS y respaldar desde GitHub
+                antes = set(os.listdir(ruta_carpeta)) if os.path.exists(ruta_carpeta) else set()
+                if os.environ.get("GCS_BUCKET"):
+                    try:
+                        import gcs_sync
+                        gcs_sync.sync_from_gcs(force=True)
+                    except Exception:
+                        pass
+                try:
+                    url_list_gh = f"https://api.github.com/repos/{REPO_NAME}/contents/asistencias"
+                    headers_gh_pub = {"Accept": "application/vnd.github.v3+json", "User-Agent": "Streamlit-App"}
+                    if GITHUB_TOKEN:
+                        headers_gh_pub["Authorization"] = f"token {GITHUB_TOKEN}"
+                    r_list = requests.get(url_list_gh, headers=headers_gh_pub, timeout=15)
+                    if r_list.status_code == 200:
+                        os.makedirs(ruta_carpeta, exist_ok=True)
+                        actuales = set(os.listdir(ruta_carpeta))
+                        for item_gh in r_list.json():
+                            fname_gh = item_gh.get("name", "")
+                            dl_url = item_gh.get("download_url")
+                            if fname_gh.upper().startswith("MAQUINADOS_") and fname_gh.lower().endswith((".xls", ".xlsx")) and fname_gh not in actuales and dl_url:
+                                r_dl = requests.get(dl_url, timeout=15)
+                                if r_dl.status_code == 200:
+                                    p_dest = os.path.join(ruta_carpeta, fname_gh)
+                                    with open(p_dest, "wb") as f_out:
+                                        f_out.write(r_dl.content)
+                                    guardar_archivo_sync(p_dest)
+                except Exception:
+                    pass
+                despues = set(os.listdir(ruta_carpeta)) if os.path.exists(ruta_carpeta) else set()
+                files_out = sorted(list(despues - antes))
+                n_out = len(files_out)
+
+            df_h = recalcular_historico_completo(ruta_carpeta, ARCHIVO_PERSONAL, hora_limite_input)
+            if not df_h.empty:
+                df_h.to_excel(ARCHIVO_HISTORICO, index=False)
+                guardar_archivo_sync(ARCHIVO_HISTORICO)
+                if GITHUB_TOKEN and files_out:
+                    try:
+                        headers_gh = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json", "User-Agent": "Streamlit-App"}
+                        for f_out_name in files_out:
+                            p_local = os.path.join(ruta_carpeta, f_out_name).replace("\\", "/")
+                            with open(p_local, "rb") as f_bytes:
+                                c_bytes = f_bytes.read()
+                            url_api_f = f"https://api.github.com/repos/{REPO_NAME}/contents/asistencias/{f_out_name}"
+                            requests.put(url_api_f, json={"message": f"Sync auto Outlook: {f_out_name}", "content": base64.b64encode(c_bytes).decode("utf-8")}, headers=headers_gh, timeout=15)
+                    except Exception:
+                        pass
+            st.cache_data.clear()
+            if n_out > 0:
+                st.session_state["mensaje_exito"] = f"✅ ¡{n_out} reporte(s) nuevo(s) sincronizado(s): {', '.join(files_out[:3])}!"
+                status_out.update(label=f"✅ ¡{n_out} reporte(s) nuevo(s) importado(s)!", state="complete")
+            else:
+                st.session_state["mensaje_exito"] = "✅ Base de asistencias verificada y al día."
+                status_out.update(label="✅ Todo al día. No hay reportes pendientes.", state="complete")
+            st.rerun()
+
+    # ---- 4) CARGA MANUAL ----
     _sb_titulo("📥", "Cargar Asistencias (manual)")
     
     # Mostrar mensaje de éxito si existe en el estado de sesión y limpiarlo
@@ -942,48 +1011,7 @@ if st.session_state["usuario_rol"] is not None:
                     
                     status.update(label="✅ ¡Archivos e historial sincronizados!", state="complete")
                     st.rerun()
-    # Sincronización automática desde Outlook
-    if _outlook_disponible():
-        _sb_titulo("📧", "Sincronizar desde Outlook")
-        st.sidebar.caption("Descarga los reportes del checador (noreply@sigrama.com.mx).")
-        btn_sync_out = st.sidebar.button("📥 Sincronizar desde Outlook", use_container_width=True, key="btn_sync_outlook")
-    else:
-        btn_sync_out = False
-    if btn_sync_out:
-        with st.sidebar.status("Conectando con Outlook y buscando reportes...", expanded=True) as status_out:
-            n_out, files_out = sincronizar_archivos_outlook(ruta_carpeta)
-            if n_out > 0:
-                df_h = recalcular_historico_completo(ruta_carpeta, ARCHIVO_PERSONAL, hora_limite_input)
-                if not df_h.empty:
-                    df_h.to_excel(ARCHIVO_HISTORICO, index=False)
-                    guardar_archivo_sync(ARCHIVO_HISTORICO)
-                    if GITHUB_TOKEN:
-                        try:
-                            # Subir cada archivo nuevo a GitHub
-                            for f_out_name in files_out:
-                                p_local = os.path.join(ruta_carpeta, f_out_name).replace("\\", "/")
-                                with open(p_local, "rb") as f_bytes:
-                                    c_bytes = f_bytes.read()
-                                url_api_f = f"https://api.github.com/repos/{REPO_NAME}/contents/asistencias/{f_out_name}"
-                                headers_gh = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json", "User-Agent": "Streamlit-App"}
-                                requests.put(url_api_f, json={"message": f"Sync auto Outlook: {f_out_name}", "content": base64.b64encode(c_bytes).decode("utf-8")}, headers=headers_gh, timeout=15)
-                            
-                            # Subir histórico actualizado
-                            with open(ARCHIVO_HISTORICO, "rb") as fh:
-                                c_hist = fh.read()
-                            url_api_hist = f"https://api.github.com/repos/{REPO_NAME}/contents/asistencias/historico_semanal.xlsx"
-                            res_gh = requests.get(url_api_hist, headers=headers_gh, timeout=10)
-                            sha_h = res_gh.json().get("sha") if res_gh.status_code == 200 else None
-                            payload_h = {"message": "Sync auto Outlook: historico_semanal.xlsx", "content": base64.b64encode(c_hist).decode("utf-8")}
-                            if sha_h: payload_h["sha"] = sha_h
-                            requests.put(url_api_hist, json=payload_h, headers=headers_gh, timeout=15)
-                        except Exception:
-                            pass
-                st.cache_data.clear()
-                status_out.update(label=f"✅ ¡{n_out} reporte(s) nuevo(s) importado(s) desde Outlook!", state="complete")
-                st.rerun()
-            else:
-                status_out.update(label="ℹ️ Todo al día. No hay reportes nuevos en Outlook.", state="complete")
+
 
     # Sincronización automática desde Rutas Locales y Red (Q: y Google Drive)
     rutas_conectadas = [r for r in RUTAS_ORIGEN_LOCALES if os.path.exists(r)]
