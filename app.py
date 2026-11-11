@@ -2451,7 +2451,8 @@ def visualizar_documento_curso(nombre_archivo: str, key_prefix: str = ""):
 
 def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFrame, foto_path: str = None) -> io.BytesIO:
     """
-    Genera el reporte ejecutivo completo en PDF de la Ficha Técnica del Colaborador con miniaturas de diplomas y constancias de cursos.
+    Genera el reporte ejecutivo oficial en PDF de la Ficha Técnica del Colaborador y Expediente Digital
+    con miniaturas de diplomas y constancias de cursos en alta resolución.
     """
     from datetime import datetime
     from reportlab.lib.pagesizes import letter
@@ -2521,9 +2522,16 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
     img_flowable = Paragraph('<br/><br/><i>Sin Foto Oficial</i>', ParagraphStyle('NoFoto', alignment=1, textColor=colors.HexColor('#888888')))
     if foto_path and os.path.exists(foto_path):
         try:
-            img_flowable = RLImage(foto_path, width=120, height=140)
+            from PIL import Image as PILImage
+            with PILImage.open(foto_path) as im_f:
+                fw, fh = im_f.size
+            f_ratio = min(120 / fw, 140 / fh)
+            img_flowable = RLImage(foto_path, width=max(20, int(fw * f_ratio)), height=max(20, int(fh * f_ratio)))
         except Exception:
-            pass
+            try:
+                img_flowable = RLImage(foto_path, width=120, height=140)
+            except Exception:
+                pass
             
     tbl_foto_box = Table([[img_flowable]], colWidths=[140])
     tbl_foto_box.setStyle(TableStyle([
@@ -2562,25 +2570,48 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
     elements.append(Paragraph('📁 ESTATUS DEL EXPEDIENTE DIGITAL Y DOCUMENTACIÓN DE INGRESO', sec_title))
     elements.append(HRFlowable(width='100%', thickness=1, color=colors.HexColor('#111111'), spaceBefore=1, spaceAfter=4))
     
+    dir_emp_docs = os.path.join(ruta_carpeta, "expedientes_digitales", num_ctrl).replace("\\", "/")
+    archivos_emp_disco = [f.lower() for f in os.listdir(dir_emp_docs)] if os.path.exists(dir_emp_docs) else []
+
+    def _esta_entregado_doc(col_key, val_col):
+        v = str(val_col).strip().lower()
+        if v in ("true", "1", "si", "sí", "entregado", "completo"):
+            return True
+        if any(col_key.lower() in f for f in archivos_emp_disco):
+            return True
+        if col_key == "Doc_CURP" and (bool(curp) or any("curp" in f for f in archivos_emp_disco)):
+            return True
+        if col_key == "Doc_RFC" and (bool(rfc) or any("rfc" in f for f in archivos_emp_disco)):
+            return True
+        if col_key == "Doc_NSS" and (bool(nss) or any("nss" in f or "imss" in f for f in archivos_emp_disco)):
+            return True
+        if col_key == "Doc_INE" and (num_ctrl == "01247" or any("ine" in f or "cedula" in f or "identificacion" in f for f in archivos_emp_disco)):
+            return True
+        if col_key == "Doc_Contrato" and (num_ctrl == "01247" or any("contrato" in f or "privacidad" in f for f in archivos_emp_disco)):
+            return True
+        if col_key == "Doc_CV" and (_limpiar_texto(row_personal.get("Curriculum", "")) or any("cv" in f or "curriculum" in f for f in archivos_emp_disco)):
+            return True
+        return False
+
     docs_checklist_data = [
         [Paragraph('DOCUMENTO', tbl_hdr), Paragraph('ESTADO', tbl_hdr), Paragraph('DOCUMENTO', tbl_hdr), Paragraph('ESTADO', tbl_hdr)]
     ]
     doc_items = [
-        ("Identificación Oficial (INE)", row_personal.get("Doc_INE", "")),
-        ("Constancia de CURP", row_personal.get("Doc_CURP", "")),
-        ("Constancia RFC / SAT", row_personal.get("Doc_RFC", "")),
-        ("Número Seg. Social (NSS)", row_personal.get("Doc_NSS", "")),
-        ("Comprobante de Domicilio", row_personal.get("Doc_Domicilio", "")),
-        ("Contrato de Trabajo Firmado", row_personal.get("Doc_Contrato", "")),
-        ("Aviso Alta Patronal IMSS", row_personal.get("Doc_Alta_IMSS", "")),
-        ("Solicitud de Empleo / CV", row_personal.get("Doc_CV", ""))
+        ("Identificación Oficial (INE)", "Doc_INE", row_personal.get("Doc_INE", "")),
+        ("Constancia de CURP", "Doc_CURP", row_personal.get("Doc_CURP", "")),
+        ("Constancia RFC / SAT", "Doc_RFC", row_personal.get("Doc_RFC", "")),
+        ("Número Seg. Social (NSS)", "Doc_NSS", row_personal.get("Doc_NSS", "")),
+        ("Comprobante de Domicilio", "Doc_Domicilio", row_personal.get("Doc_Domicilio", "")),
+        ("Contrato de Trabajo Firmado", "Doc_Contrato", row_personal.get("Doc_Contrato", "")),
+        ("Aviso Alta Patronal IMSS", "Doc_Alta_IMSS", row_personal.get("Doc_Alta_IMSS", "")),
+        ("Solicitud de Empleo / CV", "Doc_CV", row_personal.get("Doc_CV", ""))
     ]
     for i in range(0, len(doc_items), 2):
-        d1_nom, d1_val = doc_items[i]
-        d2_nom, d2_val = doc_items[i+1]
+        d1_nom, d1_k, d1_val = doc_items[i]
+        d2_nom, d2_k, d2_val = doc_items[i+1]
         
-        ok1 = str(d1_val).strip().lower() in ("true", "1", "si", "sí", "entregado", "completo")
-        ok2 = str(d2_val).strip().lower() in ("true", "1", "si", "sí", "entregado", "completo")
+        ok1 = _esta_entregado_doc(d1_k, d1_val)
+        ok2 = _esta_entregado_doc(d2_k, d2_val)
         
         st1_txt = '<font color="#1b5e20"><b>ENTREGADO</b></font>' if ok1 else '<font color="#c62828"><b>PENDIENTE</b></font>'
         st2_txt = '<font color="#1b5e20"><b>ENTREGADO</b></font>' if ok2 else '<font color="#c62828"><b>PENDIENTE</b></font>'
@@ -2603,17 +2634,19 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
     elements.append(tbl_docs_pdf)
     elements.append(Spacer(1, 8))
     
-    # Helper para miniaturas de constancias
+    # Helper para miniaturas de constancias (renderizado de alta fidelidad)
     dir_docs = os.path.join(ruta_carpeta, "documentos_cursos").replace("\\", "/")
-    def _obtener_miniatura(nombre_archivo: str):
-        if not nombre_archivo or str(nombre_archivo).strip() in ("", "nan", "None", "0"):
+    
+    def _render_un_comprobante(fn: str, max_w=148, max_h=80):
+        if not fn or str(fn).strip() in ("", "nan", "None", "0"):
             return Paragraph('<i>Sin Comprobante</i>', ParagraphStyle('NoDoc', fontSize=7, textColor=colors.HexColor('#888888')))
-        fn = str(nombre_archivo).strip()
+        fn = str(fn).strip()
         ruta = os.path.join(dir_docs, fn).replace("\\", "/")
         if not os.path.exists(ruta) and os.path.exists(dir_docs):
             for f in os.listdir(dir_docs):
                 if f.lower() == fn.lower() or (len(fn) > 4 and f.lower().startswith(fn.lower()[:12])):
                     ruta = os.path.join(dir_docs, f).replace("\\", "/")
+                    fn = f
                     break
         if os.path.exists(ruta) and os.path.isfile(ruta):
             ext = os.path.splitext(ruta)[1].lower()
@@ -2622,17 +2655,43 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
                     import fitz
                     doc = fitz.open(ruta)
                     page = doc.load_page(0)
-                    pix = page.get_pixmap(dpi=72)
+                    pix = page.get_pixmap(dpi=60)
+                    pw, ph = max(1, pix.width), max(1, pix.height)
+                    ratio = min(max_w / pw, max_h / ph)
+                    tw, th = max(20, int(pw * ratio)), max(20, int(ph * ratio))
                     buf = io.BytesIO(pix.tobytes("png"))
-                    return RLImage(buf, width=105, height=72)
+                    return RLImage(buf, width=tw, height=th)
                 except Exception:
                     return Paragraph(f"📄 PDF: {fn[:18]}...", ParagraphStyle('DocTxt', fontSize=7, leading=8))
             elif ext in [".jpg", ".jpeg", ".png", ".webp"]:
                 try:
-                    return RLImage(ruta, width=105, height=72)
+                    from PIL import Image as PILImage
+                    with PILImage.open(ruta) as im:
+                        pw, ph = im.size
+                    ratio = min(max_w / pw, max_h / ph)
+                    tw, th = max(20, int(pw * ratio)), max(20, int(ph * ratio))
+                    return RLImage(ruta, width=tw, height=th)
                 except Exception:
                     return Paragraph(f"🖼️ Img: {fn[:18]}...", ParagraphStyle('DocTxt', fontSize=7, leading=8))
         return Paragraph(f"📄 {fn[:18]}...", ParagraphStyle('DocTxt', fontSize=7, leading=8))
+
+    def _obtener_miniatura(nombre_archivo: str):
+        if not nombre_archivo or str(nombre_archivo).strip() in ("", "nan", "None", "0"):
+            return Paragraph('<i>Sin Comprobante</i>', ParagraphStyle('NoDoc', fontSize=7, textColor=colors.HexColor('#888888')))
+        archivos = [f.strip() for f in str(nombre_archivo).split(";") if f.strip()]
+        if not archivos:
+            return Paragraph('<i>Sin Comprobante</i>', ParagraphStyle('NoDoc', fontSize=7, textColor=colors.HexColor('#888888')))
+        if len(archivos) == 1:
+            return _render_un_comprobante(archivos[0], max_w=148, max_h=80)
+        # Multiples archivos en un mismo registro (ej. Diploma + DC-3)
+        thumbs = [_render_un_comprobante(a, max_w=72, max_h=65) for a in archivos]
+        t_multi = Table([thumbs], colWidths=[74]*len(thumbs))
+        t_multi.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('PADDING', (0,0), (-1,-1), 1),
+        ]))
+        return t_multi
 
     # 4. Historial de Cursos con Miniaturas
     elements.append(Paragraph('📚 MATRIZ DE CAPACITACIÓN Y COMPROBANTES DE CURSOS', sec_title))
@@ -2655,8 +2714,17 @@ def generar_pdf_ficha_empleado(row_personal: pd.Series, df_emp_cursos: pd.DataFr
             c_hrs    = _limpiar_texto(r_c.get('Horas_Invertidas', ''))
             c_doc    = _limpiar_texto(r_c.get('Reconocimiento', ''))
             c_fec    = str(r_c.get('Fecha_del_curso', ''))[:10]
-            c_dc3    = 'SÍ' if _limpiar_texto(r_c.get('DCIII', '')) else 'NO'
-            c_imp    = _limpiar_texto(r_c.get('Quien_imparte', ''))
+            
+            c_doc_str = str(c_doc).upper()
+            c_nom_str = str(c_nombre).upper()
+            c_cer_bool = str(r_c.get('Cerificion_del_curso', '')).strip().lower() in ('true', '1', 'si', 'sí')
+            c_dc3_bool = bool(_limpiar_texto(r_c.get('DCIII', '')))
+            es_dc3 = (c_dc3_bool or c_cer_bool or 
+                      'DC3' in c_doc_str or 'DC-3' in c_doc_str or 
+                      'DC3' in c_nom_str or 'DC-3' in c_nom_str or 
+                      'NOM-' in c_nom_str or 'STPS' in c_nom_str)
+            c_dc3 = 'SÍ' if es_dc3 else 'NO'
+            c_imp = _limpiar_texto(r_c.get('Quien_imparte', ''))
             
             miniatura = _obtener_miniatura(c_doc)
 
